@@ -42,9 +42,6 @@
     <ClInclude Include="..\src\dblib_stmt_tools.hpp">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\dblib\dblib_postgresql.hpp">
-      <Filter>include</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\dblib.cpp">
@@ -72,9 +69,6 @@
       <Filter>tests</Filter>
     </ClCompile>
     <ClCompile Include="..\src\dblib_stmt_tools.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\dblib_postgresql.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
