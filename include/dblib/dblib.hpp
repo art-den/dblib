@@ -58,7 +58,7 @@ public:
 	LockResolution lock_resolution = LockResolution::Wait;
 	bool autostart = true;
 	bool auto_commit_on_destroy = true;
-	uint32_t lock_time_out = 10000;
+	uint32_t lock_time_out = 1; // seconds
 };
 
 
