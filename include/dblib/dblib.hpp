@@ -45,7 +45,7 @@ class Statement; typedef std::shared_ptr<Statement> StatementPtr;
 
 constexpr TransactionLevel DefaultTransactionLevel = TransactionLevel::Default;
 
-class DBLIB_API TransactionParams
+struct DBLIB_API TransactionParams
 {
 public:
 	TransactionParams() = default;
@@ -53,31 +53,12 @@ public:
 	TransactionParams(TransactionLevel level, bool autostart = true, bool auto_commit_on_destroy = true);
 	TransactionParams(LockResolution lock_resolution, bool autostart = true, bool auto_commit_on_destroy = true);
 
-	void set_access(TransactionAccess access);
-	TransactionAccess get_access() const;
-
-	void set_level(TransactionLevel level);
-	TransactionLevel get_level() const;
-
-	void set_lock_resolution(LockResolution lock_resolution);
-	LockResolution get_lock_resolution() const;
-
-	void set_autostart(bool autostart);
-	bool get_autostart() const;
-
-	void set_auto_commit_on_destroy(bool value);
-	bool get_auto_commit_on_destroy() const;
-
-	void set_lock_time_out(uint32_t value_in_seconds);
-	uint32_t get_lock_time_out() const;
-
-private:
-	TransactionAccess access_ = TransactionAccess::ReadAndWrite;
-	TransactionLevel level_ = TransactionLevel::RepeatableRead;
-	LockResolution lock_resolution_ = LockResolution::Wait;
-	bool autostart_ = true;
-	bool auto_commit_on_destroy_ = true;
-	uint32_t lock_time_out_ = 10000;
+	TransactionAccess access = TransactionAccess::ReadAndWrite;
+	TransactionLevel level = TransactionLevel::RepeatableRead;
+	LockResolution lock_resolution = LockResolution::Wait;
+	bool autostart = true;
+	bool auto_commit_on_destroy = true;
+	uint32_t lock_time_out = 10000;
 };
 
 

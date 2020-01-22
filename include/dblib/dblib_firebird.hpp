@@ -67,64 +67,24 @@ struct DBLIB_API FbApi
 	decltype(isc_service_start)           *isc_service_start = nullptr;
 };
 
-class DBLIB_API FbConnectParams
+struct DBLIB_API FbConnectParams
 {
-public:
-	FbConnectParams();
-	~FbConnectParams();
-	FbConnectParams(const FbConnectParams &src);
-	FbConnectParams& operator = (const FbConnectParams &src);
-
-	void set_host(const std::string &host);
-	std::string get_host() const;
-
-	void set_database(const std::wstring &database);
-	std::wstring get_database() const;
-
-	void set_user(const std::string &user);
-	std::string get_user() const;
-
-	void set_password(const std::string &password);
-	std::string get_password() const;
-
-	void set_role(const std::string &role);
-	std::string get_role() const;
-
-	void set_charset(const std::string& charset);
-	std::string get_charset() const;
-
-private:
-	DB_LIB_UNIQUE_PIMPL(Impl, impl_);
+	std::string  host;
+	std::wstring database;
+	std::string  user = "SYSDBA";
+	std::string  password = "masterkey";
+	std::string  role;
+	std::string  charset = "UTF8";
 };
 
-class DBLIB_API FbDbCreateParams
+struct DBLIB_API FbDbCreateParams
 {
-public:
-	FbDbCreateParams();
-	~FbDbCreateParams();
-	FbDbCreateParams(const FbDbCreateParams &src);
-	FbDbCreateParams& operator = (const FbDbCreateParams &src);
-
-	void set_dialect(int dialect);
-	int get_dialect() const;
-
-	void set_page_size(int page_size);
-	int get_page_size() const;
-	
-	void set_charset(const std::string &charset);
-	std::string get_charset() const;
-
-	void set_force_write(bool force_write);
-	bool get_force_write() const;
-
-	void set_user(const std::string& user);
-	std::string get_user() const;
-
-	void set_password(const std::string& password);
-	std::string get_password() const;
-
-private:
-	DB_LIB_UNIQUE_PIMPL(Impl, impl_);
+	int         dialect = 3;
+	int         page_size = 0; // 0 - use default value
+	std::string charset = "UTF8";
+	bool        force_write = true;
+	std::string user = "SYSDBA";
+	std::string password = "masterkey";
 };
 
 class DBLIB_API FbLib

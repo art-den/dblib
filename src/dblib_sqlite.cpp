@@ -556,7 +556,7 @@ SqliteConnectionImpl::create_sqlite_transaction(const TransactionParams &transac
 	check_is_connected();
 
 	auto tran = std::make_shared<SQLiteTransactionImpl>(lib_, shared_from_this(), transaction_params);
-	if (transaction_params.get_autostart())
+	if (transaction_params.autostart)
 		tran->start();
 	return tran;
 }
@@ -582,8 +582,8 @@ SQLiteTransactionImpl::SQLiteTransactionImpl(
 	lib_(lib),
 	conn_(conn)
 {
-	commit_on_destroy_ = transaction_params.get_auto_commit_on_destroy();
-	busy_time_out_ = 1000 * transaction_params.get_lock_time_out();
+	commit_on_destroy_ = transaction_params.auto_commit_on_destroy;
+	busy_time_out_ = 1000 * transaction_params.lock_time_out;
 }
 
 SQLiteTransactionImpl::~SQLiteTransactionImpl()

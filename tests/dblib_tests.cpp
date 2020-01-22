@@ -77,15 +77,15 @@ static FbConnectionPtr get_firebird_connection()
 	FbConnectParams connect_params;
 	FbDbCreateParams create_params;
 
-	connect_params.set_host("localhost");
-	connect_params.set_database(fb_database);
-	connect_params.set_user("sysdba");
-	connect_params.set_password("masterkey");
-	connect_params.set_role(role);
+	connect_params.host = "localhost";
+	connect_params.database = fb_database;
+	connect_params.user = "sysdba";
+	connect_params.password = "masterkey";
+	connect_params.role = role;
 
-	create_params.set_dialect(3);
-	create_params.set_user(connect_params.get_user());
-	create_params.set_password(connect_params.get_password());
+	create_params.dialect = 3;
+	create_params.user = connect_params.user;
+	create_params.password = connect_params.password;
 
 	return fb_lib->create_connection(connect_params, &create_params);
 }
@@ -404,13 +404,13 @@ BOOST_AUTO_TEST_CASE(trasaction_create_test)
 		if (trans1->get_state() == TransactionState::Started) trans1->commit();
 
 		TransactionParams tp2;
-		tp2.set_autostart(true);
+		tp2.autostart = true;
 		auto trans2 = connection.create_transaction(tp2);
 		BOOST_CHECK(trans2->get_state() == TransactionState::Started);
 		trans2->commit();
 
 		TransactionParams tp3;
-		tp3.set_autostart(false);
+		tp3.autostart = false;
 		auto trans3 = connection.create_transaction(tp3);
 		BOOST_CHECK(trans3->get_state() == TransactionState::Undefined);
 
@@ -539,7 +539,7 @@ BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
 		conn2.connect();
 
 		TransactionParams tr_params;
-		tr_params.set_lock_time_out(1); // 1 sec
+		tr_params.lock_time_out = 1; // 1 sec
 
 		auto tr1 = conn1.create_transaction(tr_params);
 		auto tr2 = conn2.create_transaction(tr_params);

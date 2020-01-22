@@ -783,193 +783,6 @@ static void check_status_vector(
 }
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/* class FbConnectParams */
-
-struct FbConnectParams::Impl
-{
-	std::string  host;
-	std::wstring database;
-	std::string  user;
-	std::string  password;
-	std::string  role;
-	std::string  charset = "UTF8";
-};
-
-FbConnectParams::FbConnectParams() :
-	impl_(std::make_unique<Impl>())
-{}
-
-FbConnectParams::~FbConnectParams()
-{}
-
-FbConnectParams::FbConnectParams(const FbConnectParams& src) : 
-	impl_(std::make_unique<Impl>())
-{
-	*impl_ = *src.impl_;
-}
-
-FbConnectParams& FbConnectParams::operator = (const FbConnectParams& src)
-{
-	*impl_ = *src.impl_;
-	return *this;
-}
-
-void FbConnectParams::set_host(const std::string& host)
-{
-	impl_->host = host;
-}
-
-std::string FbConnectParams::get_host() const
-{
-	return impl_->host;
-}
-
-void FbConnectParams::set_database(const std::wstring& database)
-{
-	impl_->database = database;
-}
-
-std::wstring FbConnectParams::get_database() const
-{
-	return impl_->database;
-}
-
-void FbConnectParams::set_user(const std::string& user)
-{
-	impl_->user = user;
-}
-
-std::string FbConnectParams::get_user() const
-{
-	return impl_->user;
-}
-
-void FbConnectParams::set_password(const std::string& password)
-{
-	impl_->password = password;
-}
-
-std::string FbConnectParams::get_password() const
-{
-	return impl_->password;
-}
-
-void FbConnectParams::set_role(const std::string& role)
-{
-	impl_->role = role;
-}
-
-void FbConnectParams::set_charset(const std::string& charset)
-{
-	impl_->charset = charset;
-}
-
-std::string FbConnectParams::get_charset() const
-{
-	return impl_->charset;
-}
-
-
-std::string FbConnectParams::get_role() const
-{
-	return impl_->role;
-}
-
-
-/* class FbDbCreateParams */
-
-struct FbDbCreateParams::Impl
-{
-	int         dialect = 3;
-	int         page_size = 0; // 0 - use default value
-	std::string charset = "UTF8";
-	bool        force_write = true;
-	std::string user;
-	std::string password;
-};
-
-FbDbCreateParams::FbDbCreateParams() :
-	impl_(std::make_unique<Impl>())
-{}
-
-FbDbCreateParams::~FbDbCreateParams()
-{}
-
-FbDbCreateParams::FbDbCreateParams(const FbDbCreateParams& src) :
-	impl_(std::make_unique<Impl>())
-{
-	*impl_ = *src.impl_;
-}
-
-FbDbCreateParams& FbDbCreateParams::operator = (const FbDbCreateParams& src)
-{
-	*impl_ = *src.impl_;
-	return *this;
-}
-
-void FbDbCreateParams::set_dialect(int dialect)
-{
-	impl_->dialect = dialect;
-}
-
-int FbDbCreateParams::get_dialect() const
-{
-	return impl_->dialect;
-}
-
-void FbDbCreateParams::set_page_size(int page_size)
-{
-	impl_->page_size = page_size;
-}
-
-int FbDbCreateParams::get_page_size() const
-{
-	return impl_->page_size;
-}
-
-void FbDbCreateParams::set_charset(const std::string& charset)
-{
-	impl_->charset = charset;
-}
-
-std::string FbDbCreateParams::get_charset() const
-{
-	return impl_->charset;
-}
-
-void FbDbCreateParams::set_force_write(bool force_write)
-{
-	impl_->force_write = force_write;
-}
-
-bool FbDbCreateParams::get_force_write() const
-{
-	return impl_->force_write;
-}
-
-void FbDbCreateParams::set_user(const std::string& user)
-{
-	impl_->user = user;
-}
-
-std::string FbDbCreateParams::get_user() const
-{
-	return impl_->user;
-}
-
-void FbDbCreateParams::set_password(const std::string& password)
-{
-	impl_->password = password;
-}
-
-std::string FbDbCreateParams::get_password() const
-{
-	return impl_->password;
-}
-
-
 /* class FbLib */
 
 FbLib::~FbLib()
@@ -1291,23 +1104,20 @@ void FbConnectionImpl::connect()
 
 	dpb.add_uint8(isc_dpb_version1);
 	dpb.add_uint8(isc_dpb_utf8_filename); dpb.add_uint8(0);
-	dpb.add_str(isc_dpb_user_name, connect_params_.get_user());
-	dpb.add_str(isc_dpb_password, connect_params_.get_password());
-	const auto& role = connect_params_.get_role();
-	if (!role.empty())
-		dpb.add_str(isc_dpb_sql_role_name, role);
+	dpb.add_str(isc_dpb_user_name, connect_params_.user);
+	dpb.add_str(isc_dpb_password, connect_params_.password);
+	if (!connect_params_.role.empty())
+		dpb.add_str(isc_dpb_sql_role_name, connect_params_.role);
 
-	dpb.add_str(isc_dpb_lc_ctype, connect_params_.get_charset());
+	dpb.add_str(isc_dpb_lc_ctype, connect_params_.charset);
 
 	std::string server_and_path;
-
-	const auto& host = connect_params_.get_host();
-	if (!host.empty())
+	if (!connect_params_.host.empty())
 	{
-		server_and_path.append(host);
+		server_and_path.append(connect_params_.host);
 		server_and_path.append(":");
 	}
-	server_and_path.append(utf16_to_utf8(connect_params_.get_database(), '?'));
+	server_and_path.append(utf16_to_utf8(connect_params_.database, '?'));
 
 	check_not_greater(
 		server_and_path.size(), 
@@ -1399,18 +1209,17 @@ void FbConnectionImpl::try_to_create_database()
 
 	dpb.add_uint8(isc_dpb_version1);
 	dpb.add_uint8(isc_dpb_utf8_filename); dpb.add_uint8(0);
-	dpb.add_str(isc_dpb_set_db_charset, create_params_.get_charset());
-	dpb.add_str(isc_dpb_lc_ctype, connect_params_.get_charset());
-	dpb.add_str(isc_dpb_user_name, create_params_.get_user());
-	dpb.add_str(isc_dpb_password, create_params_.get_password());
-	dpb.add_uint32_with_len(isc_dpb_sql_dialect, create_params_.get_dialect());
-	dpb.add_uint32_with_len(isc_dpb_force_write, create_params_.get_force_write() ? 1 : 0);
+	dpb.add_str(isc_dpb_set_db_charset, create_params_.charset);
+	dpb.add_str(isc_dpb_lc_ctype, connect_params_.charset);
+	dpb.add_str(isc_dpb_user_name, create_params_.user);
+	dpb.add_str(isc_dpb_password, create_params_.password);
+	dpb.add_uint32_with_len(isc_dpb_sql_dialect, create_params_.dialect);
+	dpb.add_uint32_with_len(isc_dpb_force_write, create_params_.force_write ? 1 : 0);
 
-	auto page_size = create_params_.get_page_size();
-	if (page_size > 0)
-		dpb.add_uint32_with_len(isc_dpb_page_size, page_size);
+	if (create_params_.page_size > 0)
+		dpb.add_uint32_with_len(isc_dpb_page_size, create_params_.page_size);
 
-	std::string database_utf8 = utf16_to_utf8(connect_params_.get_database(), '?');
+	std::string database_utf8 = utf16_to_utf8(connect_params_.database, '?');
 
 	ISC_STATUS status_vect[StatusLen] = {};
 	db_handle_ = 0;
@@ -1464,7 +1273,7 @@ FbTransactionPtr FbConnectionImpl::create_fb_transaction(const TransactionParams
 {
 	check_is_connected();
 	auto tran = std::make_shared<FbTransactionImpl>(lib, shared_from_this(), transaction_params);
-	if (transaction_params.get_autostart()) tran->start();
+	if (transaction_params.autostart) tran->start();
 	return tran;
 }
 
@@ -1482,11 +1291,11 @@ FbTransactionImpl::FbTransactionImpl(
 {
 	tran_ = 0;
 
-	commit_on_destroy_ = transaction_params.get_auto_commit_on_destroy();
+	commit_on_destroy_ = transaction_params.auto_commit_on_destroy;
 
 	tpb_.add_uint8(isc_tpb_version3);
 
-	switch (transaction_params.get_access())
+	switch (transaction_params.access)
 	{
 	case TransactionAccess::Read:
 		tpb_.add_uint8(isc_tpb_read);
@@ -1497,7 +1306,7 @@ FbTransactionImpl::FbTransactionImpl(
 		break;
 	}
 
-	auto level = transaction_params.get_level();
+	auto level = transaction_params.level;
 	if (level == TransactionLevel::Default)
 		level = conn_->get_default_transaction_level();
 
@@ -1525,13 +1334,13 @@ FbTransactionImpl::FbTransactionImpl(
 		throw TransactionLevelNotSupportedException(level);
 	}
 
-	switch (transaction_params.get_lock_resolution())
+	switch (transaction_params.lock_resolution)
 	{
 	case LockResolution::Wait:
 		tpb_.add_uint8(isc_tpb_wait);
 		tpb_.add_uint32_with_len(
 			isc_tpb_lock_timeout,
-			transaction_params.get_lock_time_out()
+			transaction_params.lock_time_out
 		);
 		break;
 

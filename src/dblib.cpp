@@ -29,85 +29,25 @@ THE SOFTWARE.
 
 namespace dblib {
 
-/* class TransactionParams */
+/* struct TransactionParams */
 
 TransactionParams::TransactionParams(TransactionAccess access, bool autostart, bool auto_commit_on_destroy) :
-	access_(access),
-	autostart_(autostart),
-	auto_commit_on_destroy_(auto_commit_on_destroy)
+	access(access),
+	autostart(autostart),
+	auto_commit_on_destroy(auto_commit_on_destroy)
 {}
 
 TransactionParams::TransactionParams(TransactionLevel level, bool autostart, bool auto_commit_on_destroy) :
-	level_(level),
-	autostart_(autostart),
-	auto_commit_on_destroy_(auto_commit_on_destroy)
+	level(level),
+	autostart(autostart),
+	auto_commit_on_destroy(auto_commit_on_destroy)
 {}
 
 TransactionParams::TransactionParams(LockResolution lock_resolution, bool autostart, bool auto_commit_on_destroy) :
-	lock_resolution_(lock_resolution),
-	autostart_(autostart),
-	auto_commit_on_destroy_(auto_commit_on_destroy)
+	lock_resolution(lock_resolution),
+	autostart(autostart),
+	auto_commit_on_destroy(auto_commit_on_destroy)
 {}
-
-void TransactionParams::set_access(TransactionAccess access)
-{
-	access_ = access;
-}
-
-TransactionAccess TransactionParams::get_access() const
-{
-	return access_;
-}
-
-void TransactionParams::set_level(TransactionLevel level)
-{
-	level_ = level;
-}
-
-TransactionLevel TransactionParams::get_level() const
-{
-	return level_;
-}
-
-void TransactionParams::set_lock_resolution(LockResolution lock_resolution)
-{
-	lock_resolution_ = lock_resolution;
-}
-
-LockResolution TransactionParams::get_lock_resolution() const
-{
-	return lock_resolution_;
-}
-
-void TransactionParams::set_autostart(bool autostart)
-{
-	autostart_ = autostart;
-}
-
-bool TransactionParams::get_autostart() const
-{
-	return autostart_;
-}
-
-void TransactionParams::set_auto_commit_on_destroy(bool value)
-{
-	auto_commit_on_destroy_ = value;
-}
-
-bool TransactionParams::get_auto_commit_on_destroy() const
-{
-	return auto_commit_on_destroy_;
-}
-
-void TransactionParams::set_lock_time_out(uint32_t value_in_seconds)
-{
-	lock_time_out_ = value_in_seconds;
-}
-
-uint32_t TransactionParams::get_lock_time_out() const
-{
-	return lock_time_out_;
-}
 
 
 /* class Connection */
