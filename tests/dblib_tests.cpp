@@ -704,6 +704,10 @@ BOOST_AUTO_TEST_CASE(fetch_test)
 		st->execute();
 		BOOST_CHECK(!st->fetch());
 		test_row_after_data();
+
+		st->execute("select 1 from fetch_test where int_fld = 33333");
+		BOOST_CHECK(!st->fetch());
+		test_row_after_data();
 	});
 }
 
