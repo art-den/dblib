@@ -147,13 +147,13 @@ using SQLiteTransactionImplPtr = std::shared_ptr<SQLiteTransactionImpl>;
 class SQLiteSqlPreprocessorActions : public SqlPreprocessorActions
 {
 protected:
-	void append_index_param_to_sql(const std::string& parameter, std::string& sql) const override
+	void append_index_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const override
 	{
 		sql.append("?");
 		sql.append(parameter);
 	}
 
-	void append_named_param_to_sql(const std::string& parameter, std::string& sql) const override
+	void append_named_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const override
 	{
 		sql.append(parameter);
 	}
@@ -262,28 +262,26 @@ private:
 static void check_sqlite_ret_code(
 	const SqliteApi  &api, 
 	int              ret_code, 
-	const char       *fun, 
+	const char       *fun_name, 
 	sqlite3          *db, 
-	std::string_view sql)
+	std::string_view sql,
+	ErrorType        error_type)
 {
 	if (ret_code == SQLITE_OK) return;
 
-	int ext_code = api.sqlite3_extended_errcode(db);
-
-	std::string err_text =
-		"Function " + std::string(fun) + " returns " + std::to_string(ret_code) +
-		" (" + api.sqlite3_errstr(ret_code) + "), Error message = " + api.sqlite3_errmsg(db);
-
-	if (!sql.empty())
-	{
-		err_text.append(", SQL=");
-		err_text.append(sql);
-	}
-
 	if (ret_code == SQLITE_BUSY)
-		throw DeadlockException(err_text, ret_code, ext_code);
+		error_type = ErrorType::Deadlock;
 
-	throw ExceptionEx(err_text, ret_code, ext_code);
+	throw_exception(
+		fun_name,
+		ret_code,
+		api.sqlite3_extended_errcode(db),
+		api.sqlite3_errstr(ret_code),
+		{},
+		api.sqlite3_errmsg(db),
+		sql,
+		error_type
+	);
 }
 
 static ValueType cvt_sqlite_type_to_lib_type(int sqlite_type)
@@ -407,7 +405,7 @@ SqliteConnectionPtr SqliteLibImpl::create_connection(
 	const SqliteConfig &config)
 {
 	assert(lib_->module.is_loaded());
-	return std::make_shared<SqliteConnectionImpl>(lib_, utf16_to_utf8(file_name, '?'), config);
+	return std::make_shared<SqliteConnectionImpl>(lib_, utf16_to_utf8(file_name), config);
 }
 
 SqliteConnectionPtr SqliteLibImpl::create_connection(
@@ -461,7 +459,7 @@ void SqliteConnectionImpl::connect()
 		nullptr
 	);
 
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_open", db_, {});
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_open", db_, {}, ErrorType::Connection);
 
 	auto direct_execute_helper = [this](const char *format, auto arg)
 	{
@@ -534,7 +532,7 @@ void SqliteConnectionImpl::direct_execute(std::string_view sql)
 	check_is_connected();
 	tmp_sql_text_ = sql;
 	int res = lib_->api.sqlite3_exec(db_, tmp_sql_text_.c_str(), nullptr, nullptr, nullptr);
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", db_, sql);
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", db_, sql, ErrorType::Normal);
 }
 
 void SqliteConnectionImpl::check_is_not_connected()
@@ -552,7 +550,8 @@ void SqliteConnectionImpl::check_is_connected()
 void SqliteConnectionImpl::disconnect_internal(bool check_ret_code)
 {
 	int res = lib_->api.sqlite3_close(db_);
-	if (check_ret_code) check_sqlite_ret_code(lib_->api, res, "sqlite3_close", db_, {});
+	if (check_ret_code) 
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_close", db_, {}, ErrorType::Connection);
 	db_ = nullptr;
 }
 
@@ -630,8 +629,11 @@ void SQLiteTransactionImpl::internal_start()
 
 	if (busy_time_out_ != 0)
 		lib_->api.sqlite3_busy_timeout(conn_->get_instance(), busy_time_out_);
-	conn_->direct_execute("begin");
-	set_state(TransactionState::Started);
+
+	const char* sql = "begin";
+	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
+
 	conn_->set_transaction_is_active(true);
 }
 
@@ -639,16 +641,20 @@ void SQLiteTransactionImpl::internal_start()
 void SQLiteTransactionImpl::internal_commit()
 {
 	conn_->set_transaction_is_active(false);
-	conn_->direct_execute("commit");
-	set_state(TransactionState::Commited);
+
+	const char* sql = "commit";
+	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
 }
 
 
 void SQLiteTransactionImpl::internal_rollback()
 {
 	conn_->set_transaction_is_active(false);
-	conn_->direct_execute("rollback");
-	set_state(TransactionState::Rollbacked);
+
+	const char* sql = "rollback";
+	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
 }
 
 
@@ -680,7 +686,7 @@ void SQLiteStatementImpl::close(bool check_ret_code)
 	if (stmt_ == nullptr) return;
 	int res = lib_->api.sqlite3_finalize(stmt_);
 	if (check_ret_code)
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_finalize", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_finalize", conn_->get_instance(), {}, ErrorType::Normal);
 	stmt_ = nullptr;
 	must_be_reseted_ = false;
 	step_called_ = false;
@@ -706,6 +712,7 @@ void SQLiteStatementImpl::prepare(std::string_view sql, bool use_native_paramete
 	sql_preprocessor_.preprocess(
 		sql, 
 		use_native_parameters_syntax, 
+		false,
 		SQLiteSqlPreprocessorActions()
 	);
 
@@ -723,12 +730,12 @@ void SQLiteStatementImpl::prepare(std::string_view sql, bool use_native_paramete
 		nullptr
 	);
 
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_prepare", conn_->get_instance(), sql);
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_prepare", conn_->get_instance(), sql, ErrorType::Normal);
 }
 
 void SQLiteStatementImpl::prepare(std::wstring_view sql, bool use_native_parameters_syntax)
 {
-	prepare(utf16_to_utf8(sql, '?'), use_native_parameters_syntax);
+	prepare(utf16_to_utf8(sql), use_native_parameters_syntax);
 }
 
 StatementType SQLiteStatementImpl::get_type()
@@ -752,7 +759,8 @@ void SQLiteStatementImpl::internal_execute(bool do_reset_if_needed)
 			last_step_result_, 
 			"sqlite3_step", 
 			conn_->get_instance(),
-			last_sql_
+			last_sql_,
+			ErrorType::Normal
 		);
 }
 
@@ -761,7 +769,7 @@ void SQLiteStatementImpl::reset_statement() const
 	if (!must_be_reseted_) return;
 	int res = lib_->api.sqlite3_reset(stmt_);
 	must_be_reseted_ = false;
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_reset", conn_->get_instance(), {});
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_reset", conn_->get_instance(), {}, ErrorType::Normal);
 }
 
 void SQLiteStatementImpl::execute()
@@ -854,7 +862,7 @@ void SQLiteStatementImpl::set_null(const IndexOrName& param)
 void SQLiteStatementImpl::set_null_impl(int index)
 {
 	int res = lib_->api.sqlite3_bind_null(stmt_, index);
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_null", conn_->get_instance(), {});
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_null", conn_->get_instance(), {}, ErrorType::Normal);
 }
 
 void SQLiteStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value)
@@ -865,7 +873,7 @@ void SQLiteStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value
 	if (value.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_int(stmt_, index, *value);
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -879,7 +887,7 @@ void SQLiteStatementImpl::set_int64_opt(const IndexOrName& param, Int64Opt value
 	if (value.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_int64(stmt_, index, *value);
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -893,7 +901,7 @@ void SQLiteStatementImpl::set_float_opt(const IndexOrName& param, FloatOpt value
 	if (value.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_double(stmt_, index, *value);
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -907,7 +915,7 @@ void SQLiteStatementImpl::set_double_opt(const IndexOrName& param, DoubleOpt val
 	if (value.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_double(stmt_, index, *value);
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -927,7 +935,7 @@ void SQLiteStatementImpl::set_u8str_opt(const IndexOrName& param, const StringOp
 			(int)text->size(), 
 			SQLITE_TRANSIENT
 		);
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_text", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_text", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -935,7 +943,7 @@ void SQLiteStatementImpl::set_u8str_opt(const IndexOrName& param, const StringOp
 
 void SQLiteStatementImpl::set_wstr_opt(const IndexOrName& param, const WStringOpt &text)
 {
-	set_u8str_opt(param, text.has_value() ? utf16_to_utf8(*text, '?') : StringOpt{});
+	set_u8str_opt(param, text.has_value() ? utf16_to_utf8(*text) : StringOpt{});
 }
 
 void SQLiteStatementImpl::set_date_opt(const IndexOrName& param, const DateOpt &date)
@@ -946,7 +954,7 @@ void SQLiteStatementImpl::set_date_opt(const IndexOrName& param, const DateOpt &
 	if (date.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_double(stmt_, index, date_to_julianday(*date));
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -960,7 +968,7 @@ void SQLiteStatementImpl::set_time_opt(const IndexOrName& param, const TimeOpt &
 	if (time.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_double(stmt_, index, time_to_julianday(*time));
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -974,7 +982,7 @@ void SQLiteStatementImpl::set_timestamp_opt(const IndexOrName& param, const Time
 	if (ts.has_value())
 	{
 		int res = lib_->api.sqlite3_bind_double(stmt_, index, timestamp_to_julianday(*ts));
-		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {});
+		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
 		set_null_impl(index);
@@ -989,7 +997,7 @@ void SQLiteStatementImpl::set_blob(
 	reset_statement();
 	auto index = get_param_index(param);
 	int res = lib_->api.sqlite3_bind_blob(stmt_, index, blob_data, (int)blob_size, nullptr);
-	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_blob", conn_->get_instance(), {});
+	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_blob", conn_->get_instance(), {}, ErrorType::Normal);
 }
 
 size_t SQLiteStatementImpl::get_columns_count()

@@ -65,42 +65,44 @@ void Transaction::start()
 {
 	check_not_started();
 	internal_start();
+	state_ = TransactionState::Started;
 }
 
 void Transaction::commit()
 {
 	check_started();
 	internal_commit();
+	state_ = TransactionState::Commited;
 }
 
 void Transaction::commit_and_start()
 {
 	check_started();
 	internal_commit();
+	state_ = TransactionState::Commited;
 	internal_start();
+	state_ = TransactionState::Started;
 }
 
 void Transaction::rollback()
 {
 	check_started();
 	internal_rollback();
+	state_ = TransactionState::Rollbacked;
 }
 
 void Transaction::rollback_and_start()
 {
 	check_started();
 	internal_rollback();
+	state_ = TransactionState::Rollbacked;
 	internal_start();
+	state_ = TransactionState::Started;
 }
 
 TransactionState Transaction::get_state() const
 {
 	return state_;
-}
-
-void Transaction::set_state(TransactionState new_state)
-{
-	state_ = new_state;
 }
 
 void Transaction::check_not_started()

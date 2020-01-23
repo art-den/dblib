@@ -20,6 +20,7 @@
 #include "dblib/dblib.hpp"
 #include "dblib/dblib_firebird.hpp"
 #include "dblib/dblib_sqlite.hpp"
+#include "dblib/dblib_postgresql.hpp"
 #include "dblib/dblib_cvt_utils.hpp"
 
 
@@ -30,6 +31,7 @@
 #elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 #define DBLIB_WINDOWS
 #include <Windows.h>
+#pragma comment(lib, "libpq.lib") // ???
 #else
 #error "Unsupported platform"
 #endif
@@ -118,6 +120,19 @@ static SqliteConnectionPtr get_sqlite_connection()
 	return sqlite_lib->create_connection(sqlite_database, {});
 }
 
+static PgConnectionPtr get_postgresql_connection()
+{
+	PgConnectParams params;
+
+	params.connect_timeout = 10;
+	params.host = "localhost";
+	params.db_name = "dblib_test";
+	params.user = "dblib_test";
+	params.password = "dblib_test";
+
+	return create_pg_connection(params);
+}
+
 using Connections = std::vector<ConnectionPtr>;
 
 static void for_all_connections_do(size_t conn_count, const std::function<void (const Connections&)> &fun)
@@ -141,6 +156,16 @@ static void for_all_connections_do(size_t conn_count, const std::function<void (
 
 		fun(sqlite_conns);
 	}
+
+	if (false)
+	{
+		Connections pb_conns;
+
+		for (size_t i = 0; i < conn_count; i++)
+			pb_conns.push_back(get_postgresql_connection());
+
+		fun(pb_conns);
+	}
 }
 
 static void exec_no_throw(Connection &connection, std::initializer_list<std::string> sql_list)
@@ -154,7 +179,10 @@ static void exec_no_throw(Connection &connection, std::initializer_list<std::str
 			st->execute(sql);
 			tran->commit();
 		}
-		catch (...) {}
+		catch (...) 
+		{
+			tran->rollback();
+		}
 	}
 }
 
@@ -193,13 +221,13 @@ BOOST_AUTO_TEST_CASE(preprocess_sql_test)
 	class TestSqlPreprocessorActions : public SqlPreprocessorActions
 	{
 	protected:
-		void append_index_param_to_sql(const std::string& parameter, std::string& sql) const override
+		void append_index_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const override
 		{
 			sql.append("$I");
 			sql.append(parameter);
 		}
 
-		void append_named_param_to_sql(const std::string& parameter, std::string& sql) const override
+		void append_named_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const override
 		{
 			sql.append("$N");
 			sql.append(parameter);
@@ -223,58 +251,58 @@ BOOST_AUTO_TEST_CASE(preprocess_sql_test)
 	TestSqlPreprocessorActions actions;
 	SqlPreprocessor preprocessor;
 
-	preprocessor.preprocess("test", false, actions);
+	preprocessor.preprocess("test", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test");
 
-	preprocessor.preprocess("test 'aaa'", false, actions);
+	preprocessor.preprocess("test 'aaa'", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test 'aaa'");
 
-	preprocessor.preprocess("test ?1", false, actions);
+	preprocessor.preprocess("test ?1", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $I1");
 
-	preprocessor.preprocess("?1", false, actions);
+	preprocessor.preprocess("?1", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "$I1");
 
-	preprocessor.preprocess("?1?2", false, actions);
+	preprocessor.preprocess("?1?2", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "$I1$I2");
 
-	preprocessor.preprocess("?1aaa", false, actions);
+	preprocessor.preprocess("?1aaa", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "$I1aaa");
 
-	preprocessor.preprocess("test @aaa", false, actions);
+	preprocessor.preprocess("test @aaa", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $N@aaa");
 
-	preprocessor.preprocess("test @aaa%", false, actions);
+	preprocessor.preprocess("test @aaa%", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $N@aaa%");
 
-	preprocessor.preprocess("test ?1 ?2", false, actions);
+	preprocessor.preprocess("test ?1 ?2", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $I1 $I2");
 
-	preprocessor.preprocess("test ?1 ?2 @aaa% @bbb%", false, actions);
+	preprocessor.preprocess("test ?1 ?2 @aaa% @bbb%", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $I1 $I2 $N@aaa% $N@bbb%");
 
-	preprocessor.preprocess("test ?1 ?2 @aaa @bbb", false, actions);
+	preprocessor.preprocess("test ?1 ?2 @aaa @bbb", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test $I1 $I2 $N@aaa $N@bbb");
 
-	preprocessor.preprocess("test '?1 ?2'", false, actions);
+	preprocessor.preprocess("test '?1 ?2'", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test '?1 ?2'");
 
-	preprocessor.preprocess("'?1 ?2'", false, actions);
+	preprocessor.preprocess("'?1 ?2'", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "'?1 ?2'");
 
-	preprocessor.preprocess("test 'text?1 ?2text'", false, actions);
+	preprocessor.preprocess("test 'text?1 ?2text'", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test 'text?1 ?2text'");
 
-	preprocessor.preprocess("test 'aaa''aaa ?1'", false, actions);
+	preprocessor.preprocess("test 'aaa''aaa ?1'", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test 'aaa''aaa ?1'");
 
-	preprocessor.preprocess("test 'aaa''aaa ?1' ?1", false, actions);
+	preprocessor.preprocess("test 'aaa''aaa ?1' ?1", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "test 'aaa''aaa ?1' $I1");
 
-	preprocessor.preprocess("insert into tbl(text, {if_seq id}) values('aaaa', {next id_gen})", false, actions);
+	preprocessor.preprocess("insert into tbl(text, {if_seq id}) values('aaaa', {next id_gen})", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "insert into tbl(text, id) values('aaaa', gen_id(id_gen, 1))");
 
-	preprocessor.preprocess("insert into tbl({if_seq id,} text) values({next id_gen,} 'aaaa')", false, actions);
+	preprocessor.preprocess("insert into tbl({if_seq id,} text) values({next id_gen,} 'aaaa')", false, false, actions);
 	BOOST_CHECK(preprocessor.get_preprocessed_sql() == "insert into tbl(id, text) values(gen_id(id_gen, 1), 'aaaa')");
 }
 
@@ -680,6 +708,15 @@ BOOST_AUTO_TEST_CASE(fetch_test)
 		BOOST_CHECK(!st->fetch());
 		test_row_after_data();
 
+		// partially fetch
+		st->execute("select int_fld from fetch_test where int_fld < 3 order by int_fld");
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->get_int32(1) == 1);
+		st->execute("select int_fld from fetch_test where int_fld = 3 order by int_fld");
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->get_int32(1) == 3);
+		BOOST_CHECK(!st->fetch());
+
 		// prepare + fetch
 		st->prepare("select * from fetch_test where int_fld = ?1");
 		st->set_int32(1, 1);
@@ -827,7 +864,7 @@ BOOST_AUTO_TEST_CASE(parameters_test_num)
 				"int_fld    integer, "
 				"flt_fld    float, "
 				"vchar_fld1 varchar(256), "
-				"vchar_fld2 varchar(256) "
+				"vchar_fld2 char(256) "
 			")"
 		});
 
@@ -845,6 +882,8 @@ BOOST_AUTO_TEST_CASE(parameters_test_num)
 		st->set_wstr(4, L"Юникодный текст");
 
 		st->execute();
+
+		st->commit_and_start_transaction();
 
 		st->execute(
 			"select t.int_fld, t.flt_fld, t.vchar_fld1, t.vchar_fld2 "

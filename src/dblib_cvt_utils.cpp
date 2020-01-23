@@ -234,15 +234,25 @@ double time_to_julianday(const Time &time)
 
 double date_to_julianday(int year, int mon, int day)
 {
+	return date_to_julianday_integer(year, mon, day);
+}
+
+int date_to_julianday_integer(int year, int mon, int day)
+{
 	int64_t a = (14 - (int64_t)mon) / 12;
 	int64_t y = (int64_t)year + 4800 - a;
 	int64_t m = (int64_t)mon + 12 * a - 3;
-	return (double)((int64_t)day + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045);
+	return (int)((int64_t)day + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045);
 }
 
 double date_to_julianday(const Date &date)
 {
 	return date_to_julianday(date.year, date.month, date.day);
+}
+
+int date_to_julianday_integer(const Date& date)
+{
+	return date_to_julianday_integer(date.year, date.month, date.day);
 }
 
 double timestamp_to_julianday(int year, int mon, int day, int hour, int min, int sec, int msec)
@@ -284,9 +294,14 @@ Time julianday_to_time(double julianday)
 
 Date julianday_to_date(double julianday)
 {
+	return julianday_integer_to_date(static_cast<int>(julianday));
+}
+
+Date julianday_integer_to_date(int julianday)
+{
 	Date result;
 
-	int a = static_cast<int>(julianday) + 32044;
+	int a = julianday + 32044;
 	int b = (4 * a + 3) / 146097;
 	int c = a - (146097 * b) / 4;
 	int d = (4 * c + 3) / 1461;

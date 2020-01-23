@@ -25,6 +25,7 @@
     <ClInclude Include="..\include\dblib\dblib_cvt_utils.hpp" />
     <ClInclude Include="..\include\dblib\dblib_exception.hpp" />
     <ClInclude Include="..\include\dblib\dblib_firebird.hpp" />
+    <ClInclude Include="..\include\dblib\dblib_postgresql.hpp" />
     <ClInclude Include="..\include\dblib\dblib_sqlite.hpp" />
     <ClInclude Include="..\src\dblib_dyn.hpp" />
     <ClInclude Include="..\src\dblib_stmt_tools.hpp" />
@@ -37,6 +38,7 @@
     <ClCompile Include="..\src\dblib_dyn.cpp" />
     <ClCompile Include="..\src\dblib_exception.cpp" />
     <ClCompile Include="..\src\dblib_firebird.cpp" />
+    <ClCompile Include="..\src\dblib_postgresql.cpp" />
     <ClCompile Include="..\src\dblib_sqlite.cpp" />
     <ClCompile Include="..\src\dblib_stmt_tools.cpp" />
     <ClCompile Include="dblib_tests.cpp" />

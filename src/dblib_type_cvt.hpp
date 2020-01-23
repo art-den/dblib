@@ -35,6 +35,31 @@ THE SOFTWARE.
 
 namespace dblib {
 
+class IParameterSetterWithTypeCvt
+{
+public:
+	virtual void set_int16_impl(size_t index, int16_t value) = 0;
+	virtual void set_int32_impl(size_t index, int32_t value) = 0;
+	virtual void set_int64_impl(size_t index, int64_t value) = 0;
+	virtual void set_float_impl(size_t index, float value) = 0;
+	virtual void set_double_impl(size_t index, double value) = 0;
+	virtual void set_u8str_impl(size_t index, const std::string& text) = 0;
+	virtual void set_wstr_impl(size_t index, const std::wstring& text) = 0;
+};
+
+class IResultGetterWithTypeCvt
+{
+public:
+	virtual int16_t get_int16_impl(size_t index) = 0;
+	virtual int32_t get_int32_impl(size_t index) = 0;
+	virtual int64_t get_int64_impl(size_t index) = 0;
+	virtual float get_float_impl(size_t index) = 0;
+	virtual double get_double_impl(size_t index) = 0;
+	virtual std::string get_str_utf8_impl(size_t index) = 0;
+	virtual std::wstring get_wstr_impl(size_t index) = 0;
+};
+
+
 template <typename T>
 constexpr const char *get_std_type_name()
 {
@@ -145,7 +170,7 @@ R float_to(A arg)
 }
 
 template <typename R, typename A>
-R str_to(const A &arg)
+R str_to(A &&arg)
 {
 	if constexpr (std::is_same_v<R, A>)
 		return arg;
@@ -171,28 +196,8 @@ R str_to(const A &arg)
 		static_assert(false, "Unsupported type in str_to");
 }
 
-class TypeConverterDataProvider
-{
-public:
-	virtual void set_int16_impl(size_t index, int16_t value) = 0;
-	virtual void set_int32_impl(size_t index, int32_t value) = 0;
-	virtual void set_int64_impl(size_t index, int64_t value) = 0;
-	virtual void set_float_impl(size_t index, float value) = 0;
-	virtual void set_double_impl(size_t index, double value) = 0;
-	virtual void set_u8str_impl(size_t index, const std::string &text) = 0;
-	virtual void set_wstr_impl(size_t index, const std::wstring &text) = 0;
-
-	virtual int16_t get_int16_impl(size_t index) = 0;
-	virtual int32_t get_int32_impl(size_t index) = 0;
-	virtual int64_t get_int64_impl(size_t index) = 0;
-	virtual float get_float_impl(size_t index) = 0;
-	virtual double get_double_impl(size_t index) = 0;
-	virtual std::string get_str_utf8_impl(size_t index) = 0;
-	virtual std::wstring get_wstr_impl(size_t index) = 0;
-};
-
 template <typename T> 
-void set_int_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, size_t index, T value)
+void set_int_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, T value)
 {
 	switch (param_type)
 	{
@@ -223,14 +228,14 @@ void set_int_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, size_
 
 	default:
 		throw WrongTypeConvException(
-			"Can't convert from from " + std::string(get_std_type_name<T>()) +
-			" to " + field_type_to_string(param_type)
+			get_std_type_name<T>(),
+			field_type_to_string(param_type)
 		);
 	}
 }
 
 template <typename T> 
-void set_float_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, size_t index, T value)
+void set_float_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, T value)
 {
 	switch (param_type)
 	{
@@ -261,19 +266,19 @@ void set_float_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, siz
 
 	default:
 		throw WrongTypeConvException(
-			"Can't convert from from " + std::string(get_std_type_name<T>()) +
-			" to " + field_type_to_string(param_type)
+			get_std_type_name<T>(),
+			field_type_to_string(param_type)
 		);
 	}
 }
 
 template <typename T> 
-void set_str_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, size_t index, const T &text)
+void set_str_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, const T &text)
 {
 	static_assert(
 		std::is_same_v<T, std::string> | std::is_same_v<T, std::wstring>,
 		"Type must be std::string or std::wstring"
-		);
+	);
 
 	switch (param_type)
 	{
@@ -307,14 +312,33 @@ void set_str_with_cvt(TypeConverterDataProvider &dp, ValueType param_type, size_
 
 	default:
 		throw WrongTypeConvException(
-			"Can't convert from from " + std::string(get_std_type_name<T>()) +
-			" to " + field_type_to_string(param_type)
+			get_std_type_name<T>(),
+			field_type_to_string(param_type)
 		);
 	}
 }
 
-template <typename T> T 
-get_with_type_cvt(TypeConverterDataProvider &dp, ValueType fld_type, size_t index)
+template <typename T>
+void set_param_with_type_cvt(IParameterSetterWithTypeCvt& dp, ValueType param_type, size_t index, T&& param_value)
+{
+	using Type = std::remove_const_t<std::remove_reference_t<T> >;
+
+	if constexpr (std::is_same_v<Type, int16_t> || std::is_same_v<Type, int32_t> || std::is_same_v<Type, int64_t>)
+		set_int_param_with_type_cvt(dp, param_type, index, param_value);
+
+	else if constexpr (std::is_same_v<Type, float> || std::is_same_v<Type, double>)
+		set_float_param_with_type_cvt(dp, param_type, index, param_value);
+
+	else if constexpr (std::is_same_v<Type, std::string> || std::is_same_v<Type, std::wstring>)
+		set_str_param_with_type_cvt(dp, param_type, index, param_value);
+
+	else
+		static_assert(false, "Type is not supported in set_param_with_type_cvt");
+}
+
+
+template <typename T> 
+T get_with_type_cvt(IResultGetterWithTypeCvt &dp, ValueType fld_type, size_t index)
 {
 	switch (fld_type)
 	{
@@ -328,6 +352,19 @@ get_with_type_cvt(TypeConverterDataProvider &dp, ValueType fld_type, size_t inde
 		return int_to<T>(dp.get_int64_impl(index));
 
 	case ValueType::Char:
+		if constexpr (std::is_same_v<T, std::string>)
+		{
+			auto str = dp.get_str_utf8_impl(index);
+			while (!str.empty() && (str.back() == ' ')) str.pop_back(); // trim right
+			return str_to<T>(std::move(str));
+		}
+		else
+		{
+			auto str = dp.get_wstr_impl(index);
+			while (!str.empty() && (str.back() == ' ')) str.pop_back(); // trim right
+			return str_to<T>(std::move(str));
+		}
+
 	case ValueType::Varchar:
 		if constexpr (std::is_same_v<T, std::string>)
 			return str_to<T>(dp.get_str_utf8_impl(index));
@@ -342,9 +379,74 @@ get_with_type_cvt(TypeConverterDataProvider &dp, ValueType fld_type, size_t inde
 	}
 
 	throw WrongTypeConvException(
-		"Can't convert from from " + field_type_to_string(fld_type) +
-		" to " + get_std_type_name<T>()
+		field_type_to_string(fld_type),
+		get_std_type_name<T>()
 	);
+}
+
+// integer -> big endian area
+template <typename T>
+void write_value_into_bytes_be(T value, char* dest_it)
+{
+	static_assert(std::is_integral_v<T>);
+
+	dest_it += sizeof(T) - 1;
+	for (size_t i = 0; i < sizeof(T); i++)
+	{
+		*dest_it-- = value & 0xFF;
+		value >>= 8;
+	}
+}
+
+// float -> big endian area
+template <>
+inline void write_value_into_bytes_be<float>(float value, char *dest_it)
+{
+	write_value_into_bytes_be(
+		*(uint32_t*)&value,
+		dest_it
+	);
+}
+
+// double -> big endian area
+template <>
+inline void write_value_into_bytes_be(double value, char* dest_it)
+{
+	write_value_into_bytes_be(
+		*(uint64_t*)&value,
+		dest_it
+	);
+}
+
+// big endian area -> integer
+template <typename T>
+T read_value_from_bytes_be(const char* src_it)
+{
+	static_assert(std::is_integral_v<T>);
+
+	T result = 0;
+	for (size_t i = 0; i < sizeof(T); i++)
+	{
+		result <<= 8;
+		result |= (unsigned char)(*src_it++);
+	}
+	return result;
+}
+
+// big endian area -> float
+template <>
+inline float read_value_from_bytes_be<float>(const char* src_it)
+{
+	auto tmp = read_value_from_bytes_be<uint32_t>(src_it);
+	return *(float*)&tmp;
+}
+
+// big endian area -> double
+template <>
+inline double read_value_from_bytes_be<double>(const char* src_it)
+{
+	auto tmp = read_value_from_bytes_be<uint64_t>(src_it);
+	return *(double*)&tmp;
 }
 
 

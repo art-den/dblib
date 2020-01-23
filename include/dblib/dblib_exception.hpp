@@ -68,6 +68,7 @@ class DBLIB_API WrongTypeConvException : public ExceptionEx
 {
 public:
 	WrongTypeConvException(const std::string &text);
+	WrongTypeConvException(std::string_view from_type_name, std::string_view to_type_name);
 };
 
 
@@ -122,16 +123,6 @@ class DBLIB_API WrongColumnType : public Exception
 {
 public:
 	char const* what() const override;
-};
-
-class DBLIB_API SqlException : public ExceptionEx
-{
-public:
-	SqlException(const std::string &text, std::string_view sql_text, int code, int ext_code);
-	std::string get_sql_text() const;
-
-private:
-	std::string sql_text_;
 };
 
 class DBLIB_API ColumnNotFoundException : public Exception

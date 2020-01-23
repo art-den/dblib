@@ -30,6 +30,16 @@ THE SOFTWARE.
 
 namespace dblib {
 
+
+enum class StmtState
+{
+	Undef,
+	Error,
+	Prepared,
+	Executed,
+	FinishedFetching
+};
+
 struct CaseInsensitiveComparer
 {
 	using is_transparent = std::true_type;
@@ -40,8 +50,8 @@ struct CaseInsensitiveComparer
 class SqlPreprocessorActions
 {
 public:
-	virtual void append_index_param_to_sql(const std::string& parameter, std::string& sql) const = 0;
-	virtual void append_named_param_to_sql(const std::string& parameter, std::string& sql) const = 0;
+	virtual void append_index_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const = 0;
+	virtual void append_named_param_to_sql(const std::string& parameter, int param_index, std::string& sql) const = 0;
 	virtual void append_if_seq_data(const std::string& data, const std::string& other, std::string& sql) const = 0;
 	virtual void append_seq_generator(const std::string& seq_name, const std::string& other, std::string& sql) const = 0;
 };
@@ -49,11 +59,18 @@ public:
 class SqlPreprocessor
 {
 public:
-	void preprocess(std::string_view sql, bool use_native_parameters_syntax, const SqlPreprocessorActions &actions);
+	void preprocess(
+		std::string_view sql, 
+		bool use_native_parameters_syntax, 
+		bool supports_indexed_params, 
+		const SqlPreprocessorActions &actions
+	);
 	
 	const std::string& get_preprocessed_sql() const;
 
 	void do_for_param_indexes(const IndexOrName& param, const std::function<void(size_t)>& fun);
+
+	size_t get_parameters_count() const;
 
 private:
 	using NamedParams = std::map<std::string, std::vector<size_t>, CaseInsensitiveComparer>;
@@ -71,10 +88,10 @@ private:
 		NamedParams                  &named_params, 
 		IndexedParams                &indexed_params, 
 		int                          &param_index,
-		bool                         use_native_parameters_syntax
+		bool                         use_native_parameters_syntax,
+		bool                         supports_indexed_params
 	);
 };
-
 
 class ColumnsHelper
 {
@@ -90,5 +107,24 @@ private:
 	Statement& statement_;
 	bool initialized_ = false;
 };
+
+enum class ErrorType
+{
+	Normal,
+	Transaction,
+	Deadlock,
+	Connection
+};
+
+void throw_exception(
+	const char       *fun_name, 
+	int              code, 
+	int              extended_code,
+	std::string_view code_expl, 
+	std::string_view sql_state,
+	std::string_view err_msg, 
+	std::string_view sql, 
+	ErrorType        error_type
+);
 
 } // namespace dblib

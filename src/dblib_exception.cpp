@@ -35,7 +35,7 @@ ExceptionEx::ExceptionEx(const std::wstring &text, int code, int ext_code) :
 	code_(code),
 	ext_code_(ext_code)
 {
-	auto utf8_text = utf16_to_utf8(text, '?');
+	auto utf8_text = utf16_to_utf8(text);
 	text_buffer_.assign(utf8_text.begin(), utf8_text.end());
 	text_buffer_.push_back(0);
 }
@@ -75,6 +75,17 @@ TypeRangeExceeds::TypeRangeExceeds(const std::string &text) :
 
 WrongTypeConvException::WrongTypeConvException(const std::string &text) :
 	ExceptionEx(text, 0, 0) 
+{}
+
+WrongTypeConvException::WrongTypeConvException(
+	std::string_view from_type_name, 
+	std::string_view to_type_name
+) : 
+	ExceptionEx(
+		"Can't convert from from " + std::string(from_type_name) + " to " + std::string(to_type_name),
+		0, 
+		0
+	)
 {}
 
 
@@ -138,19 +149,6 @@ char const* WrongParameterType::what() const
 char const* WrongColumnType::what() const
 {
 	return "Wrong column type";
-}
-
-
-// SqlException
-
-SqlException::SqlException(const std::string &text, std::string_view sql_text, int code, int ext_code) :
-	ExceptionEx(text + "\n\nSQL=\n" + std::string{ sql_text }, code, ext_code),
-	sql_text_(sql_text)
-{}
-
-std::string SqlException::get_sql_text() const 
-{ 
-	return sql_text_; 
 }
 
 

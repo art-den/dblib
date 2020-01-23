@@ -43,15 +43,6 @@ namespace
 	const unsigned short DaVersion = 1;
 }
 
-enum class ErrorStatus
-{
-	Normal,
-	Internal,
-	Transaction,
-	Sql,
-	Connection
-};
-
 /* class BinaryBuffer */
 
 class BinaryBuffer
@@ -399,7 +390,10 @@ private:
 
 /* class FbStatementImpl */
 
-class FbStatementImpl : public FbStatement, protected TypeConverterDataProvider
+class FbStatementImpl : 
+	public FbStatement, 
+	public IParameterSetterWithTypeCvt,
+	public IResultGetterWithTypeCvt
 {
 public:
 	FbStatementImpl(const FbLibDataPtr& lib, const FbConnectionImplPtr& conn, const FbTransactionImplPtr& tran);
@@ -462,8 +456,7 @@ public:
 
 	isc_stmt_handle& get_handle() override;
 
-protected:
-	// TypeConverterDataProvider impl.
+	// IParameterSetterWithTypeCvt impl.
 	void set_int16_impl(size_t index, int16_t value) override;
 	void set_int32_impl(size_t index, int32_t value) override;
 	void set_int64_impl(size_t index, int64_t value) override;
@@ -471,6 +464,8 @@ protected:
 	void set_double_impl(size_t index, double value) override;
 	void set_u8str_impl(size_t index, const std::string& text) override;
 	void set_wstr_impl(size_t index, const std::wstring& text) override;
+
+	// IResultGetterWithTypeCvt impl.
 	int16_t get_int16_impl(size_t index) override;
 	int32_t get_int32_impl(size_t index) override;
 	int64_t get_int64_impl(size_t index) override;
@@ -496,7 +491,7 @@ private:
 	std::string last_sql_;
 	std::string preprocessed_sql_;
 	bool sql_preprocessed_flag_ = false;
-	mutable ColumnsHelper columns_helper_;
+	ColumnsHelper columns_helper_;
 	bool has_data_ = false;
 	std::string utf8_sql_buffer_;
 
@@ -507,6 +502,12 @@ private:
 	void close(bool throw_exception);
 	void close_cursor();
 	void internal_execute();
+
+	template<typename T>
+	void set_param_opt_impl(const IndexOrName& param, const std::optional<T>& value);
+
+	template<typename T>
+	std::optional<T> get_value_opt_impl(const IndexOrName& column);
 };
 
 /* class FbSqlPreprocessorActions */
@@ -514,12 +515,12 @@ private:
 class FbSqlPreprocessorActions : public SqlPreprocessorActions
 {
 protected:
-	void append_index_param_to_sql(const std::string&, std::string& sql) const override
+	void append_index_param_to_sql(const std::string&, int, std::string& sql) const override
 	{
 		sql.append("?");
 	}
 
-	void append_named_param_to_sql(const std::string& parameter, std::string& sql) const override
+	void append_named_param_to_sql(const std::string& parameter, int, std::string& sql) const override
 	{
 		sql.append("?");
 	}
@@ -720,12 +721,21 @@ static bool is_status_vector_ok(const ISC_STATUS *status_vect)
 
 static void check_status_vector(
 	const FbApi       &api,
+	const char        *fun_name,
 	const ISC_STATUS  *status_vect,
-	ErrorStatus       error_status,
+	ErrorType         error_type,
 	std::string_view  sql)
 {
 	if (is_status_vector_ok(status_vect)) return;
 
+	// error code
+	ISC_LONG sql_code = api.isc_sqlcode(status_vect);
+
+	// error code explanation
+	char sql_msg[2048] = { 0 };
+	api.isc_sql_interprete((ISC_SHORT)sql_code, sql_msg, sizeof(sql_msg));
+
+	// error text
 	std::string whole_error_text;
 	const ISC_STATUS *status_vector_to_call = status_vect;
 	for (;;)
@@ -738,18 +748,7 @@ static void check_status_vector(
 		if (!status_vector_to_call) break;
 	}
 
-	ISC_LONG sql_code = api.isc_sqlcode(status_vect);
-	char sql_msg[2048] = { 0 };
-	api.isc_sql_interprete((ISC_SHORT)sql_code, sql_msg, sizeof(sql_msg));
-
-	whole_error_text.append(sql_msg);
-
-	if ((error_status != ErrorStatus::Sql) && !sql.empty())
-	{
-		whole_error_text.append("\nsql=\n");
-		whole_error_text.append(sql);
-	}
-
+	// deadlock?
 	bool update_conflict = false;
 	for (size_t i = 0; (i < StatusLen) && (status_vect[i] != 0); i += 2)
 	{
@@ -760,30 +759,20 @@ static void check_status_vector(
 		}
 	}
 
-	if (update_conflict)
-		throw DeadlockException(whole_error_text, sql_code, isc_update_conflict);
+	if (update_conflict) 
+		error_type = ErrorType::Deadlock;
 
-	switch (error_status)
-	{
-	case ErrorStatus::Internal:
-		throw InternalException(whole_error_text, sql_code, -1);
-
-	case ErrorStatus::Transaction:
-		throw TransactionException(whole_error_text, sql_code, -1);
-
-	case ErrorStatus::Sql:
-		if (!sql.empty())
-			throw SqlException(whole_error_text, sql, sql_code, -1);
-		else
-			throw ExceptionEx(whole_error_text, sql_code, -1);
-
-	case ErrorStatus::Connection:
-		throw ConnectException(whole_error_text, sql_code, -1);
-
-	case ErrorStatus::Normal:
-	default:
-		throw ExceptionEx(whole_error_text, sql_code, -1);
-	}
+	// throw
+	throw_exception(
+		fun_name,
+		sql_code,
+		-1,
+		sql_msg,
+		std::to_string(sql_code),
+		whole_error_text,
+		sql,
+		error_type
+	);
 }
 
 
@@ -907,7 +896,7 @@ void FbServicesImpl::attach(const FbServicesConnectParams &params)
 	ISC_STATUS status[StatusLen] = {};
 
 	lib_->api.isc_service_attach(status, 0, (char*)name.c_str(), &handle_, spb.size(), spb.data());
-	check_status_vector(lib_->api, status, ErrorStatus::Normal, {});
+	check_status_vector(lib_->api, "isc_service_attach", status, ErrorType::Normal, {});
 }
 
 void FbServicesImpl::detach()
@@ -988,14 +977,14 @@ void FbServicesImpl::detach_internal(bool check_error)
 	ISC_STATUS status[StatusLen] = {};
 	lib_->api.isc_service_detach(status, &handle_);
 	if (check_error)
-		check_status_vector(lib_->api, status, ErrorStatus::Normal, {});
+		check_status_vector(lib_->api, "isc_service_detach", status, ErrorType::Normal, {});
 }
 
 void FbServicesImpl::start_service_and_check_status(const BinaryBuffer &data)
 {
 	ISC_STATUS status[StatusLen] = {};
 	lib_->api.isc_service_start(status, &handle_, nullptr, data.size(), data.data());
-	check_status_vector(lib_->api, status, ErrorStatus::Normal, {});
+	check_status_vector(lib_->api, "isc_service_start", status, ErrorType::Normal, {});
 }
 
 
@@ -1051,7 +1040,7 @@ void FbConnectionImpl::connect()
 		server_and_path.append(connect_params_.host);
 		server_and_path.append(":");
 	}
-	server_and_path.append(utf16_to_utf8(connect_params_.database, '?'));
+	server_and_path.append(utf16_to_utf8(connect_params_.database));
 
 	check_not_greater(
 		server_and_path.size(), 
@@ -1063,7 +1052,7 @@ void FbConnectionImpl::connect()
 
 	ISC_STATUS status_vect[StatusLen] = {};
 
-	auto attach_database = [&]
+	auto attach_database = [&] (bool check_status)
 	{
 		assert(server_and_path.size() <= SHRT_MAX);
 		lib->api.isc_attach_database(
@@ -1074,9 +1063,18 @@ void FbConnectionImpl::connect()
 			dpb.size(),
 			dpb.data()
 		);
+
+		if (check_status)
+			check_status_vector(
+				lib->api, 
+				"isc_attach_database", 
+				status_vect, 
+				ErrorType::Connection, 
+				{}
+			);
 	};
 
-	attach_database();
+	attach_database(false);
 
 	// if it's error and create params are defined
 	if (create_params_defined_ && !is_status_vector_ok(status_vect) && (status_vect[1] == isc_io_error))
@@ -1086,9 +1084,9 @@ void FbConnectionImpl::connect()
 		disconnect();
 
 		// connect to new created database
-		attach_database();
+		attach_database(true);
 	}
-	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
+	
 
 	// get info about database
 
@@ -1104,7 +1102,7 @@ void FbConnectionImpl::connect()
 		(short)res_buffer.size(),
 		res_buffer.data()
 	);
-	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
+	check_status_vector(lib->api, "isc_database_info", status_vect, ErrorType::Connection, {});
 
 	dialect_ = res_buffer.get_int(lib->api, isc_info_db_SQL_dialect);
 	assert(dialect_ != -1);
@@ -1121,7 +1119,7 @@ void FbConnectionImpl::internal_disconnect(bool throw_exception)
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib->api.isc_detach_database(status_vect, &db_handle_);
 	if (throw_exception)
-		check_status_vector(lib->api, status_vect, ErrorStatus::Internal, {});
+		check_status_vector(lib->api, "isc_detach_database", status_vect, ErrorType::Connection, {});
 	db_handle_ = 0;
 }
 
@@ -1153,7 +1151,7 @@ void FbConnectionImpl::try_to_create_database()
 	if (create_params_.page_size > 0)
 		dpb.add_uint32_with_len(isc_dpb_page_size, create_params_.page_size);
 
-	std::string database_utf8 = utf16_to_utf8(connect_params_.database, '?');
+	std::string database_utf8 = utf16_to_utf8(connect_params_.database);
 
 	ISC_STATUS status_vect[StatusLen] = {};
 	db_handle_ = 0;
@@ -1170,7 +1168,7 @@ void FbConnectionImpl::try_to_create_database()
 		0
 	);
 
-	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
+	check_status_vector(lib->api, "isc_create_database", status_vect, ErrorType::Connection, {});
 }
 
 TransactionPtr FbConnectionImpl::create_transaction(const TransactionParams& transaction_params)
@@ -1329,17 +1327,15 @@ void FbTransactionImpl::internal_start()
 		tpb_.size(),
 		tpb_.data()
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Normal, {});
-	set_state(TransactionState::Started);
+	check_status_vector(lib_->api, "isc_start_transaction", status_vect, ErrorType::Normal, {});
 }
 
 void FbTransactionImpl::internal_commit()
 {
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_commit_transaction(status_vect, &tran_);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Normal, {});
+	check_status_vector(lib_->api, "isc_commit_transaction", status_vect, ErrorType::Normal, {});
 	tran_ = 0;
-	set_state(TransactionState::Commited);
 }
 
 void FbTransactionImpl::internal_rollback()
@@ -1347,9 +1343,8 @@ void FbTransactionImpl::internal_rollback()
 	check_started();
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_rollback_transaction(status_vect, &tran_);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Normal, {});
+	check_status_vector(lib_->api, "isc_rollback_transaction", status_vect, ErrorType::Normal, {});
 	tran_ = 0;
-	set_state(TransactionState::Rollbacked);
 }
 
 /* class SqlDA */
@@ -1414,11 +1409,15 @@ void SqlDA::check_size(const FbApi& api, bool in, isc_stmt_handle stmt)
 		ISC_STATUS status_vect[StatusLen] = {};
 
 		if (in)
+		{
 			api.isc_dsql_describe_bind(status_vect, &stmt, DaVersion, data_);
+			check_status_vector(api, "isc_dsql_describe_bind", status_vect, ErrorType::Normal, {});
+		}
 		else
+		{
 			api.isc_dsql_describe(status_vect, &stmt, DaVersion, data_);
-
-		check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+			check_status_vector(api, "isc_dsql_describe", status_vect, ErrorType::Normal, {});
+		}
 	}
 }
 
@@ -1432,7 +1431,7 @@ void SqlDA::close_blob_handles(const FbApi& api, bool throw_exception)
 		api.isc_close_blob(status_vect, &item.blob_handle);
 		item.blob_handle = 0;
 		if (throw_exception)
-			check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+			check_status_vector(api, "isc_close_blob", status_vect, ErrorType::Normal, {});
 	}
 }
 
@@ -1544,7 +1543,7 @@ void InSqlDA::string_param(size_t index, const std::string& value)
 
 void InSqlDA::wstring_param(size_t index, const std::wstring& value)
 {
-	string_param(index, utf16_to_utf8(value, '?'));
+	string_param(index, utf16_to_utf8(value));
 }
 
 
@@ -1604,19 +1603,19 @@ void InSqlDA::blob_param(
 		nullptr
 	);
 
-	check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(api, "isc_create_blob2", status_vect, ErrorType::Normal, {});
 
 	while (blob_size != 0)
 	{
 		uint16_t len = (blob_size > SHRT_MAX) ? SHRT_MAX : (short)blob_size;
 		api.isc_put_segment(status_vect, &bl_handle, len, blob_data);
-		check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+		check_status_vector(api, "isc_put_segment", status_vect, ErrorType::Normal, {});
 		blob_data += len;
 		blob_size -= len;
 	}
 
 	api.isc_close_blob(status_vect, &bl_handle);
-	check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(api, "isc_close_blob", status_vect, ErrorType::Normal, {});
 }
 
 
@@ -1671,7 +1670,7 @@ std::wstring OutSqlDA::get_wstring(size_t index)
 	case SQL_TEXT:
 	case SQL_VARYING:
 		get_str_var(var, tmp_buffer_);
-		return utf8_to_utf16(tmp_buffer_, '?');
+		return utf8_to_utf16(tmp_buffer_);
 	}
 	throw WrongColumnType{};
 }
@@ -1725,7 +1724,7 @@ void OutSqlDA::prepare_blob_handle(
 		nullptr
 	);
 
-	check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(api, "isc_open_blob2", status_vect, ErrorType::Normal, {});
 }
 
 
@@ -1753,7 +1752,7 @@ size_t OutSqlDA::get_blob_size(
 		res_buffer.data()
 	);
 
-	check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(api, "isc_blob_info", status_vect, ErrorType::Normal, {});
 
 	return res_buffer.get_int(api, isc_info_blob_total_length);
 }
@@ -1790,7 +1789,7 @@ void OutSqlDA::read_blob(
 			buffer.data()
 		);
 
-		check_status_vector(api, status_vect, ErrorStatus::Internal, {});
+		check_status_vector(api, "isc_get_segment", status_vect, ErrorType::Normal, {});
 
 		std::copy(buffer.begin(), buffer.begin() + bytes_read, dst_from);
 
@@ -1853,7 +1852,7 @@ void FbStatementImpl::close(bool throw_exception)
 	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_drop);
 
 	if (throw_exception)
-		check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+		check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, ErrorType::Normal, {});
 
 	out_sqlda_.clear_null_flags();
 	out_sqlda_.clear_buffers();
@@ -1873,7 +1872,7 @@ void FbStatementImpl::close_cursor()
 
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_close);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, ErrorType::Normal, {});
 }
 
 void FbStatementImpl::prepare_impl(std::string_view sql)
@@ -1888,7 +1887,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		&conn_->get_handle(),
 		&stmt_
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib_->api, "isc_dsql_allocate_statement", status_vect, ErrorType::Normal, {});
 
 	assert(sql.size() <= USHRT_MAX);
 	lib_->api.isc_dsql_prepare(
@@ -1900,7 +1899,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		conn_->get_dialect(),
 		out_sqlda_.data()
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Sql, sql);
+	check_status_vector(lib_->api, "isc_dsql_prepare", status_vect, ErrorType::Normal, sql);
 
 	type_ = get_type_internal();
 
@@ -1910,7 +1909,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		DaVersion,
 		in_sqlda_.data()
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib_->api, "isc_dsql_describe_bind", status_vect, ErrorType::Normal, {});
 
 	in_sqlda_.check_size(lib_->api, true, stmt_);
 	in_sqlda_.alloc_fields();
@@ -1939,7 +1938,7 @@ StatementType FbStatementImpl::get_type_internal()
 		sizeof(res_buffer),
 		res_buffer
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, ErrorType::Normal, {});
 
 	int stmt_type_len = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[1], 2);
 	int stmt_type = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[3], stmt_type_len);
@@ -1981,7 +1980,7 @@ size_t FbStatementImpl::get_changes_count()
 		sizeof(res_buffer),
 		res_buffer
 	);
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, ErrorType::Normal, {});
 
 	if (res_buffer[0] != isc_info_sql_records) return 0;
 
@@ -2031,8 +2030,9 @@ void FbStatementImpl::internal_execute()
 
 	check_status_vector(
 		lib_->api,
+		"isc_dsql_execute2",
 		status_vect,
-		ErrorStatus::Sql,
+		ErrorType::Normal,
 		last_sql_
 	);
 
@@ -2049,6 +2049,7 @@ void FbStatementImpl::prepare(std::string_view sql, bool use_native_parameters_s
 	sql_preprocessor_.preprocess(
 		sql,
 		use_native_parameters_syntax,
+		false,
 		FbSqlPreprocessorActions()
 	);
 
@@ -2057,7 +2058,7 @@ void FbStatementImpl::prepare(std::string_view sql, bool use_native_parameters_s
 
 void FbStatementImpl::prepare(std::wstring_view sql, bool use_native_parameters_syntax)
 {
-	utf16_to_utf8(sql, utf8_sql_buffer_, '?');
+	utf16_to_utf8(sql, utf8_sql_buffer_);
 	prepare(utf8_sql_buffer_, use_native_parameters_syntax);
 }
 
@@ -2069,7 +2070,7 @@ void FbStatementImpl::execute(std::string_view sql)
 
 void FbStatementImpl::execute(std::wstring_view sql)
 {
-	utf16_to_utf8(sql, utf8_sql_buffer_, '?');
+	utf16_to_utf8(sql, utf8_sql_buffer_);
 	execute(utf8_sql_buffer_);
 }
 
@@ -2099,7 +2100,7 @@ bool FbStatementImpl::fetch()
 		throw WrongSeqException("Can't fetch data");
 	}
 
-	check_status_vector(lib_->api, status_vect, ErrorStatus::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_fetch", status_vect, ErrorType::Normal, {});
 	return false;
 }
 
@@ -2146,7 +2147,8 @@ void FbStatementImpl::set_null(const IndexOrName& param)
 	);
 }
 
-void FbStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value)
+template<typename T>
+void FbStatementImpl::set_param_opt_impl(const IndexOrName& param, const std::optional<T>& value)
 {
 	check_is_prepared();
 
@@ -2156,7 +2158,7 @@ void FbStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value)
 		{
 			in_sqlda_.check_index(internal_index);
 
-			if (value.has_value()) set_int_with_cvt(
+			if (value.has_value()) set_param_with_type_cvt(
 				*this,
 				in_sqlda_.get_column_type(internal_index),
 				internal_index,
@@ -2165,106 +2167,36 @@ void FbStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value)
 			in_sqlda_.set_null(internal_index, !value.has_value());
 		}
 	);
+}
+
+void FbStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value)
+{
+	set_param_opt_impl(param, value);
 }
 
 void FbStatementImpl::set_int64_opt(const IndexOrName& param, Int64Opt value)
 {
-	check_is_prepared();
-
-	sql_preprocessor_.do_for_param_indexes(
-		param,
-		[this, &value](size_t internal_index)
-		{
-			in_sqlda_.check_index(internal_index);
-			if (value.has_value()) set_int_with_cvt(
-				*this,
-				in_sqlda_.get_column_type(internal_index),
-				internal_index,
-				*value
-			);
-			in_sqlda_.set_null(internal_index, !value.has_value());
-		}
-	);
+	set_param_opt_impl(param, value);
 }
 
 void FbStatementImpl::set_float_opt(const IndexOrName& param, FloatOpt value)
 {
-	check_is_prepared();
-
-	sql_preprocessor_.do_for_param_indexes(
-		param,
-		[this, &value](size_t internal_index)
-		{
-			in_sqlda_.check_index(internal_index);
-			if (value.has_value()) set_float_with_cvt(
-				*this,
-				in_sqlda_.get_column_type(internal_index),
-				internal_index,
-				*value
-			);
-			in_sqlda_.set_null(internal_index, !value.has_value());
-		}
-	);
+	set_param_opt_impl(param, value);
 }
 
 void FbStatementImpl::set_double_opt(const IndexOrName& param, DoubleOpt value)
 {
-	check_is_prepared();
-
-	sql_preprocessor_.do_for_param_indexes(
-		param,
-		[this, &value](size_t internal_index)
-		{
-			in_sqlda_.check_index(internal_index);
-			if (value.has_value()) set_float_with_cvt(
-				*this,
-				in_sqlda_.get_column_type(internal_index),
-				internal_index,
-				*value
-			);
-			in_sqlda_.set_null(internal_index, !value.has_value());
-		}
-	);
+	set_param_opt_impl(param, value);
 }
 
 void FbStatementImpl::set_u8str_opt(const IndexOrName& param, const StringOpt& text)
 {
-	check_is_prepared();
-
-	sql_preprocessor_.do_for_param_indexes(
-		param,
-		[this, &text](size_t internal_index)
-		{
-			in_sqlda_.check_index(internal_index);
-			if (text.has_value()) set_str_with_cvt(
-				*this,
-				in_sqlda_.get_column_type(internal_index),
-				internal_index,
-				*text
-			);
-			in_sqlda_.set_null(internal_index, !text.has_value());
-		}
-	);
+	set_param_opt_impl(param, text);
 }
 
 void FbStatementImpl::set_wstr_opt(const IndexOrName& param, const WStringOpt& text)
 {
-	check_is_prepared();
-
-	sql_preprocessor_.do_for_param_indexes(
-		param,
-		[this, &text](size_t internal_index)
-		{
-			in_sqlda_.check_index(internal_index);
-			if (text.has_value()) set_str_with_cvt(
-				*this,
-				in_sqlda_.get_column_type(internal_index),
-				internal_index,
-				*text
-			);
-			in_sqlda_.set_null(internal_index, !text.has_value());
-		}
-	);
+	set_param_opt_impl(param, text);
 }
 
 void FbStatementImpl::set_date_opt(const IndexOrName& param, const DateOpt& date)
@@ -2401,65 +2333,45 @@ bool FbStatementImpl::is_null(const IndexOrName& column)
 	return out_sqlda_.is_null(index);
 }
 
-
-Int32Opt FbStatementImpl::get_int32_opt(const IndexOrName& column)
+template<typename T>
+std::optional<T> FbStatementImpl::get_value_opt_impl(const IndexOrName& column)
 {
 	check_is_prepared();
 	check_has_data();
 	auto index = columns_helper_.get_column_index(column);
 	out_sqlda_.check_index(index);
 	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<int32_t>(*this, out_sqlda_.get_column_type(index), index);
+	return get_with_type_cvt<T>(*this, out_sqlda_.get_column_type(index), index);
+}
+
+Int32Opt FbStatementImpl::get_int32_opt(const IndexOrName& column)
+{
+	return get_value_opt_impl<int32_t>(column);
 }
 
 Int64Opt FbStatementImpl::get_int64_opt(const IndexOrName& column)
 {
-	check_is_prepared();
-	check_has_data();
-	auto index = columns_helper_.get_column_index(column);
-	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<int64_t>(*this, out_sqlda_.get_column_type(index), index);
+	return get_value_opt_impl<int64_t>(column);
 }
 
 FloatOpt FbStatementImpl::get_float_opt(const IndexOrName& column)
 {
-	check_is_prepared();
-	check_has_data();
-	auto index = columns_helper_.get_column_index(column);
-	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<float>(*this, out_sqlda_.get_column_type(index), index);
+	return get_value_opt_impl<float>(column);
 }
 
 DoubleOpt FbStatementImpl::get_double_opt(const IndexOrName& column)
 {
-	check_is_prepared();
-	check_has_data();
-	auto index = columns_helper_.get_column_index(column);
-	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<double>(*this, out_sqlda_.get_column_type(index), index);
+	return get_value_opt_impl<double>(column);
 }
 
 StringOpt FbStatementImpl::get_str_utf8_opt(const IndexOrName& column)
 {
-	check_is_prepared();
-	check_has_data();
-	auto index = columns_helper_.get_column_index(column);
-	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<std::string>(*this, out_sqlda_.get_column_type(index), index);
+	return get_value_opt_impl<std::string>(column);
 }
 
 WStringOpt FbStatementImpl::get_wstr_opt(const IndexOrName& column)
 {
-	check_is_prepared();
-	check_has_data();
-	auto index = columns_helper_.get_column_index(column);
-	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) return {};
-	return get_with_type_cvt<std::wstring>(*this, out_sqlda_.get_column_type(index), index);
+	return get_value_opt_impl<std::wstring>(column);
 }
 
 DateOpt FbStatementImpl::get_date_opt(const IndexOrName& column)

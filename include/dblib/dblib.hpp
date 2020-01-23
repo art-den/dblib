@@ -104,8 +104,6 @@ protected:
 	virtual void internal_commit() = 0;
 	virtual void internal_rollback() = 0;
 
-	void set_state(TransactionState new_state);
-
 	void check_not_started();
 	void check_started();
 

@@ -56,7 +56,11 @@ bool CaseInsensitiveComparer::operator() (std::string_view left, std::string_vie
 
 /* class SqlPreprocessor */
 
-void SqlPreprocessor::preprocess(std::string_view sql, bool use_native_parameters_syntax, const SqlPreprocessorActions &actions)
+void SqlPreprocessor::preprocess(
+	std::string_view             sql, 
+	bool                         use_native_parameters_syntax, 
+	bool                         supports_indexed_params,
+	const SqlPreprocessorActions &actions)
 {
 	use_native_parameters_syntax_ = use_native_parameters_syntax;
 
@@ -73,7 +77,8 @@ void SqlPreprocessor::preprocess(std::string_view sql, bool use_native_parameter
 		named_params_, 
 		indexed_params_, 
 		param_index,
-		use_native_parameters_syntax_
+		use_native_parameters_syntax_,
+		supports_indexed_params
 	);
 }
 
@@ -111,6 +116,11 @@ void SqlPreprocessor::do_for_param_indexes(const IndexOrName& param, const std::
 		fun(param.get_index());
 }
 
+size_t SqlPreprocessor::get_parameters_count() const
+{
+	return indexed_params_.size() + named_params_.size();
+}
+
 #ifdef DBLIB_BOOST_REGEX
 namespace regex_ns = boost;
 #else
@@ -124,7 +134,8 @@ void SqlPreprocessor::preprocess_internal(
 	NamedParams                  &named_params, 
 	IndexedParams                &indexed_params, 
 	int                          &param_index,
-	bool                         use_native_parameters_syntax)
+	bool                         use_native_parameters_syntax,
+	bool                         supports_indexed_params)
 {
 	static regex_ns::regex item_regex{
 		R"--((\?)\d+)--" // (gr 1) indexed param ?1, ?2 etc
@@ -166,10 +177,19 @@ void SqlPreprocessor::preprocess_internal(
 			{
 				preprocessed_sql.insert(preprocessed_sql.end(), begin, m[0].first);
 				parameter.assign(m[0].first + 1, m[0].second); // + 1 to skip ?
-				actions.append_index_param_to_sql(parameter, preprocessed_sql);
 				size_t user_index = atoi(parameter.c_str());
-				indexed_params[user_index].push_back(param_index);
-				param_index++;
+
+				if (supports_indexed_params && indexed_params.count(user_index))
+				{
+					size_t existing_index = indexed_params[user_index][0];
+					actions.append_index_param_to_sql(parameter, (int)existing_index, preprocessed_sql);
+				}
+				else
+				{
+					indexed_params[user_index].push_back(param_index);
+					actions.append_index_param_to_sql(parameter, param_index, preprocessed_sql);
+					param_index++;
+				}
 			}
 			else
 				preprocessed_sql.insert(preprocessed_sql.end(), begin, m[0].second);
@@ -182,9 +202,18 @@ void SqlPreprocessor::preprocess_internal(
 			{
 				parameter.assign(m[0].first, m[0].second);
 				preprocessed_sql.insert(preprocessed_sql.end(), begin, m[0].first);
-				actions.append_named_param_to_sql(parameter, preprocessed_sql);
-				named_params[parameter].push_back(param_index);
-				param_index++;
+
+				if (supports_indexed_params && named_params.count(parameter))
+				{
+					size_t existing_index = named_params[parameter][0];
+					actions.append_index_param_to_sql(parameter, (int)existing_index, preprocessed_sql);
+				}
+				else
+				{
+					named_params[parameter].push_back(param_index);
+					actions.append_named_param_to_sql(parameter, param_index, preprocessed_sql);
+					param_index++;
+				}
 			}
 			else
 				preprocessed_sql.insert(preprocessed_sql.end(), begin, m[0].second);
@@ -209,7 +238,8 @@ void SqlPreprocessor::preprocess_internal(
 				named_params,
 				indexed_params,
 				param_index,
-				use_native_parameters_syntax
+				use_native_parameters_syntax,
+				supports_indexed_params
 			);
 
 			other_str.assign(m[7].first, m[7].second);
@@ -268,6 +298,63 @@ size_t ColumnsHelper::get_column_index(const IndexOrName& column)
 		throw ColumnNotFoundException();
 
 	return it->second;
+}
+
+
+void throw_exception(
+	const char       *fun_name,
+	int              code,
+	int              extended_code,
+	std::string_view code_expl,
+	std::string_view sql_state,
+	std::string_view err_msg,
+	std::string_view sql,
+	ErrorType        error_type)
+{
+	std::string error_text;
+	
+	error_text.append("Error during excecution of ");
+	error_text.append(fun_name);
+	error_text.append(".");
+	error_text.append("\nError code = ");
+	error_text.append(std::to_string(code));
+	if (!code_expl.empty())
+	{
+		error_text.append(" (");
+		error_text.append(code_expl);
+		error_text.append(")");
+	}
+
+	if (!sql_state.empty())
+	{
+		error_text.append("\nSQLSTATE = ");
+		error_text.append(sql_state);
+	}
+
+	error_text.append("\nError message:\n");
+	error_text.append(err_msg);
+
+	if (!sql.empty())
+	{
+		error_text.append("\nSQL = ");
+		error_text.append(sql);
+	}
+
+	switch (error_type)
+	{
+	case ErrorType::Transaction:
+		throw TransactionException(error_text, code, extended_code);
+
+	case ErrorType::Connection:
+		throw ConnectException(error_text, code, extended_code);
+
+	case ErrorType::Deadlock:
+		throw DeadlockException(error_text, code, extended_code);
+
+	case ErrorType::Normal:
+	default:
+		throw ExceptionEx(error_text, code, extended_code);
+	}
 }
 
 
