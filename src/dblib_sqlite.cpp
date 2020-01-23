@@ -215,7 +215,7 @@ public:
 	ValueType get_column_type(const IndexOrName& colum) override;
 	std::string get_column_name(size_t index) override;
 
-	bool is_null(const IndexOrName& column) const override;
+	bool is_null(const IndexOrName& column) override;
 	bool is_null_impl(size_t index) const;
 
 	Int32Opt get_int32_opt(const IndexOrName& column) override;
@@ -1000,7 +1000,7 @@ std::string SQLiteStatementImpl::get_column_name(size_t index)
 	return lib_->api.sqlite3_column_name(stmt_, (int)index - 1);
 }
 
-bool SQLiteStatementImpl::is_null(const IndexOrName& column) const
+bool SQLiteStatementImpl::is_null(const IndexOrName& column)
 {
 	check_is_prepared();
 	check_contains_data();

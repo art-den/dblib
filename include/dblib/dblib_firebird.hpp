@@ -103,28 +103,12 @@ public:
 
 using FbLibPtr = std::shared_ptr<FbLib>;
 
-class DBLIB_API FbServicesConnectParams
+struct DBLIB_API FbServicesConnectParams
 {
-public:
-	FbServicesConnectParams();
-	~FbServicesConnectParams();
-	FbServicesConnectParams(const FbServicesConnectParams& src);
-	FbServicesConnectParams& operator = (const FbServicesConnectParams& src);
-
-	void set_name(const std::string& name);
-	std::string get_name() const;
-
-	void set_host(const std::string& host);
-	std::string get_host() const;
-
-	void set_user(const std::string& user);
-	std::string get_user() const;
-
-	void set_password(const std::string& password);
-	std::string get_password() const;
-
-private:
-	DB_LIB_UNIQUE_PIMPL(Impl, impl_);
+	std::string name = "service_mgr";
+	std::string host;
+	std::string user = "SYSDBA";
+	std::string password = "masterkey";
 };
 
 class DBLIB_API FbServices

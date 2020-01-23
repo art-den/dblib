@@ -267,7 +267,7 @@ public:
 	virtual ValueType get_column_type(const IndexOrName& index) = 0;
 	virtual std::string get_column_name(size_t index) = 0;
 
-	virtual bool is_null(const IndexOrName &column) const = 0;
+	virtual bool is_null(const IndexOrName &column) = 0;
 
 	virtual Int32Opt get_int32_opt(const IndexOrName& column) = 0;
 	int32_t get_int32(const IndexOrName& column);

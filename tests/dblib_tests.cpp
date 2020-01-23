@@ -1399,10 +1399,10 @@ BOOST_AUTO_TEST_SUITE(FirebirdServices)
 BOOST_AUTO_TEST_CASE(test_fb_services_users)
 {
 	FbServicesConnectParams params;
-	params.set_name("service_mgr");
-	params.set_host("localhost");
-	params.set_user("sysdba");
-	params.set_password("masterkey");
+	params.name = "service_mgr";
+	params.host = "localhost";
+	params.user = "sysdba";
+	params.password = "masterkey";
 
 	auto services = get_firebird_services();
 	services->attach(params);

@@ -48,7 +48,8 @@ enum class ErrorStatus
 	Normal,
 	Internal,
 	Transaction,
-	Sql
+	Sql,
+	Connection
 };
 
 /* class BinaryBuffer */
@@ -446,7 +447,7 @@ public:
 	ValueType get_column_type(const IndexOrName& column) override;
 	std::string get_column_name(size_t index) override;
 
-	bool is_null(const IndexOrName& column) const override;
+	bool is_null(const IndexOrName& column) override;
 	Int32Opt get_int32_opt(const IndexOrName& column) override;
 	Int64Opt get_int64_opt(const IndexOrName& column) override;
 	FloatOpt get_float_opt(const IndexOrName& column) override;
@@ -776,6 +777,9 @@ static void check_status_vector(
 		else
 			throw ExceptionEx(whole_error_text, sql_code, -1);
 
+	case ErrorStatus::Connection:
+		throw ConnectException(whole_error_text, sql_code, -1);
+
 	case ErrorStatus::Normal:
 	default:
 		throw ExceptionEx(whole_error_text, sql_code, -1);
@@ -861,76 +865,6 @@ FbServicesPtr FbLibImpl::create_services()
 }
 
 
-/* class FbServicesConnectParams */
-
-struct FbServicesConnectParams::Impl
-{
-	std::string name;
-	std::string host;
-	std::string user;
-	std::string password;
-};
-
-FbServicesConnectParams::FbServicesConnectParams() :
-	impl_(std::make_unique<Impl>())
-{}
-
-FbServicesConnectParams::~FbServicesConnectParams()
-{}
-
-FbServicesConnectParams::FbServicesConnectParams(const FbServicesConnectParams& src) :
-	impl_(std::make_unique<Impl>())
-{
-	*impl_ = *src.impl_;
-}
-
-FbServicesConnectParams& FbServicesConnectParams::operator = (const FbServicesConnectParams& src)
-{
-	*impl_ = *src.impl_;
-	return *this;
-}
-
-void FbServicesConnectParams::set_name(const std::string& name)
-{
-	impl_->name = name;
-}
-
-std::string FbServicesConnectParams::get_name() const
-{
-	return impl_->name;
-}
-
-void FbServicesConnectParams::set_host(const std::string& host)
-{
-	impl_->host = host;
-}
-
-std::string FbServicesConnectParams::get_host() const
-{
-	return impl_->host;
-}
-
-void FbServicesConnectParams::set_user(const std::string& user)
-{
-	impl_->user = user;
-}
-
-std::string FbServicesConnectParams::get_user() const
-{
-	return impl_->user;
-}
-
-void FbServicesConnectParams::set_password(const std::string& password)
-{
-	impl_->password = password;
-}
-
-std::string FbServicesConnectParams::get_password() const
-{
-	return impl_->password;
-}
-
-
 /* class FbServices */
 
 FbServices::~FbServices()
@@ -955,20 +889,20 @@ void FbServicesImpl::attach(const FbServicesConnectParams &params)
 
 	std::string host_and_name;
 
-	auto host = params.get_host();
+	auto host = params.host;
 	if (!host.empty())
 	{
 		host_and_name.append(host);
 		host_and_name.append(":");
 	}
 
-	auto name = params.get_name();
+	auto name = params.name;
 	host_and_name.append(name);
 
 	BinaryBuffer spb;
 	spb.add_uint8(isc_spb_version, isc_spb_current_version);
-	spb.add_str(isc_spb_user_name, params.get_user());
-	spb.add_str(isc_spb_password, params.get_password());
+	spb.add_str(isc_spb_user_name, params.user);
+	spb.add_str(isc_spb_password, params.password);
 
 	ISC_STATUS status[StatusLen] = {};
 
@@ -1154,7 +1088,7 @@ void FbConnectionImpl::connect()
 		// connect to new created database
 		attach_database();
 	}
-	check_status_vector(lib->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
 
 	// get info about database
 
@@ -1170,7 +1104,7 @@ void FbConnectionImpl::connect()
 		(short)res_buffer.size(),
 		res_buffer.data()
 	);
-	check_status_vector(lib->api, status_vect, ErrorStatus::Internal, {});
+	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
 
 	dialect_ = res_buffer.get_int(lib->api, isc_info_db_SQL_dialect);
 	assert(dialect_ != -1);
@@ -1236,7 +1170,7 @@ void FbConnectionImpl::try_to_create_database()
 		0
 	);
 
-	check_status_vector(lib->api, status_vect, ErrorStatus::Normal, {});
+	check_status_vector(lib->api, status_vect, ErrorStatus::Connection, {});
 }
 
 TransactionPtr FbConnectionImpl::create_transaction(const TransactionParams& transaction_params)
@@ -2458,7 +2392,7 @@ std::string FbStatementImpl::get_column_name(size_t index)
 }
 
 
-bool FbStatementImpl::is_null(const IndexOrName& column) const
+bool FbStatementImpl::is_null(const IndexOrName& column)
 {
 	check_is_prepared();
 	check_has_data();

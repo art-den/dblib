@@ -51,6 +51,11 @@ private:
 	std::vector<char> text_buffer_;
 };
 
+class DBLIB_API ConnectException : public ExceptionEx
+{
+public:
+	using ExceptionEx::ExceptionEx;
+};
 
 class DBLIB_API TypeRangeExceeds : public ExceptionEx
 {
