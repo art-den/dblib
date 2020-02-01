@@ -146,6 +146,9 @@ struct DBLIB_API TimeStamp
 {
 	Date date;
 	Time time;
+
+	TimeStamp() = default;
+	TimeStamp(const Date &date, const Time &time);
 };
 
 DBLIB_API bool operator == (const TimeStamp &ts1, const TimeStamp &ts2);

@@ -1066,7 +1066,6 @@ BOOST_AUTO_TEST_CASE(parameters_and_fetch)
 }
 
 
-
 BOOST_AUTO_TEST_CASE(col_names_test)
 {
 	using boost::iequals;
@@ -1142,10 +1141,7 @@ BOOST_AUTO_TEST_CASE(date_test)
 		exec_no_throw(connection, { "drop table date_test" });
 		exec(connection, { "create table date_test (date_fld date)" });
 
-		Date date;
-		date.year = 1924;
-		date.month = 12;
-		date.day = 22;
+		Date date (1924, 12, 22);
 
 		auto tran = connection.create_transaction();
 		auto st = tran->create_statement();
@@ -1161,7 +1157,6 @@ BOOST_AUTO_TEST_CASE(date_test)
 }
 
 
-
 BOOST_AUTO_TEST_CASE(time_test)
 {
 	for_all_connections_do(1, [](const Connections &connections)
@@ -1172,11 +1167,7 @@ BOOST_AUTO_TEST_CASE(time_test)
 		exec_no_throw(connection, { "drop table time_test" });
 		exec(connection, { "create table time_test (time_fld time)" });
 
-		Time time;
-		time.hour = 10;
-		time.min = 22;
-		time.sec = 33;
-		time.msec = 555;
+		Time time(10, 22, 33, 555);
 
 		auto tran = connection.create_transaction();
 		auto st = tran->create_statement();
@@ -1207,15 +1198,7 @@ BOOST_AUTO_TEST_CASE(timestamp_db_test)
 			"insert into timestamp_test(ts_fld) values(null)"
 		});
 
-		TimeStamp ts;
-		ts.time.hour = 10;
-		ts.time.min = 22;
-		ts.time.sec = 33;
-		ts.time.msec = 555;
-		
-		ts.date.year = 1924;
-		ts.date.month = 12;
-		ts.date.day = 22;
+		TimeStamp ts({ 1924, 12, 2 }, {10, 22, 33, 555});
 
 		auto tran = connection.create_transaction();
 		auto st = tran->create_statement();
@@ -1249,13 +1232,14 @@ BOOST_AUTO_TEST_CASE(blobs_test)
 			? "bytea" 
 			: "blob";
 
-		exec(connection, {
+		std::string create_sql = 
 			"create table test_blobs ( "
 				"n integer, "
-				"blob_fld1 " + blob_type_name + ", "
+				"blob_fld1 " + blob_type_name + ", " +
 				"blob_fld2 " + blob_type_name + " "
-			")",
-		});
+			")";
+
+		exec(connection, { create_sql });
 
 		auto tran = connection.create_transaction();
 

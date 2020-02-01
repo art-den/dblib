@@ -178,6 +178,11 @@ bool operator != (const Time& time1, const Time& time2)
 
 /* struct TimeStamp */
 
+TimeStamp::TimeStamp(const Date& date, const Time& time) :
+	date(date),
+	time(time)
+{}
+
 static bool ts_equal(const TimeStamp& ts1, const TimeStamp& ts2)
 {
 	return
