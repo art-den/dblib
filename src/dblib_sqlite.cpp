@@ -88,6 +88,7 @@ public:
 	TransactionLevel get_default_transaction_level() const override;
 
 	void direct_execute(std::string_view sql) override;
+	std::string get_driver_name() const override;
 
 	sqlite3* get_instance() override;
 	SQLiteTransactionPtr create_sqlite_transaction(const TransactionParams &transaction_params) override;
@@ -533,6 +534,11 @@ void SqliteConnectionImpl::direct_execute(std::string_view sql)
 	tmp_sql_text_ = sql;
 	int res = lib_->api.sqlite3_exec(db_, tmp_sql_text_.c_str(), nullptr, nullptr, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", db_, sql, ErrorType::Normal);
+}
+
+std::string SqliteConnectionImpl::get_driver_name() const
+{
+	return "sqlite";
 }
 
 void SqliteConnectionImpl::check_is_not_connected()

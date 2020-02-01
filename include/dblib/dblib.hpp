@@ -79,6 +79,7 @@ public:
 	virtual TransactionLevel get_default_transaction_level() const = 0;
 
 	virtual void direct_execute(std::string_view sql) = 0;
+	virtual std::string get_driver_name() const = 0;
 };
 
 typedef std::shared_ptr<Connection> ConnectionPtr;

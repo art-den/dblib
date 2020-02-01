@@ -72,6 +72,7 @@ public:
 	void set_default_transaction_level(TransactionLevel level) override;
 	TransactionLevel get_default_transaction_level() const override;
 	void direct_execute(std::string_view sql) override;
+	std::string get_driver_name() const override;
 
 	PGconn* get_connection() override;
 	PgTransactionPtr create_pg_transaction(const TransactionParams& transaction_params) override;
@@ -609,6 +610,11 @@ void PgConnectionImpl::direct_execute(std::string_view sql)
 
 	exec_impl(direct_execute_buffer_.c_str());
 	exec_impl("COMMIT");
+}
+
+std::string PgConnectionImpl::get_driver_name() const
+{
+	return "postgresql";
 }
 
 PGconn* PgConnectionImpl::get_connection()

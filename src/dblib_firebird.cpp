@@ -235,6 +235,8 @@ public:
 
 	void direct_execute(std::string_view sql) override;
 
+	std::string get_driver_name() const override;
+
 	isc_db_handle& get_handle() override;
 	short get_dialect() const override;
 
@@ -1189,6 +1191,11 @@ TransactionLevel FbConnectionImpl::get_default_transaction_level() const
 void FbConnectionImpl::direct_execute(std::string_view sql)
 {
 	throw FunctionalityNotSupported();
+}
+
+std::string FbConnectionImpl::get_driver_name() const
+{
+	return "firebird";
 }
 
 isc_db_handle& FbConnectionImpl::get_handle()

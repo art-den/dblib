@@ -137,7 +137,7 @@ using Connections = std::vector<ConnectionPtr>;
 
 static void for_all_connections_do(size_t conn_count, const std::function<void (const Connections&)> &fun)
 {
-	if (false)
+	if (true)
 	{
 		Connections fb_conns;
 
@@ -147,7 +147,7 @@ static void for_all_connections_do(size_t conn_count, const std::function<void (
 		fun(fb_conns);
 	}
 
-	if (false)
+	if (true)
 	{
 		Connections sqlite_conns;
 
@@ -186,7 +186,7 @@ static void exec_no_throw(Connection &connection, std::initializer_list<std::str
 	}
 }
 
-static void exec(Connection &connection, std::initializer_list<std::string> sql_list)
+static void exec(Connection &connection, std::initializer_list<std::string_view> sql_list)
 {
 	for (auto &sql : sql_list)
 	{
@@ -1244,11 +1244,16 @@ BOOST_AUTO_TEST_CASE(blobs_test)
 
 		exec_no_throw(connection, { "drop table test_blobs" });
 
+		std::string blob_type_name = 
+			(connection.get_driver_name() == "postgresql") 
+			? "bytea" 
+			: "blob";
+
 		exec(connection, {
 			"create table test_blobs ( "
 				"n integer, "
-				"blob_fld1 blob, "
-				"blob_fld2 blob "
+				"blob_fld1 " + blob_type_name + ", "
+				"blob_fld2 " + blob_type_name + " "
 			")",
 		});
 
