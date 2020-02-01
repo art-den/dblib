@@ -71,6 +71,21 @@ class DBLIB_API PgStatement : public Statement
 public:
 };
 
+// Date, time and timestamp conversions in or from internal PG format
+
+DBLIB_API int32_t dblib_date_to_pg_date(const Date& date);
+
+DBLIB_API int64_t dblib_time_to_pg_time(const Time& time);
+
+DBLIB_API int64_t dblib_timestamp_to_pg_timestamp(const TimeStamp& ts);
+
+DBLIB_API Date pg_date_to_dblib_date(int32_t pg_date);
+
+DBLIB_API Time pg_time_to_dblib_time(int64_t pg_time, int32_t *date_rest = nullptr);
+
+DBLIB_API TimeStamp pg_ts_to_dblib_ts(int64_t pg_ts);
+
+// create PostreSQL connection
 
 DBLIB_API PgConnectionPtr create_pg_connection(const PgConnectParams &params);
 

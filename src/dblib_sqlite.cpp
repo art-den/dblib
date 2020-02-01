@@ -967,7 +967,7 @@ void SQLiteStatementImpl::set_time_opt(const IndexOrName& param, const TimeOpt &
 	auto index = get_param_index(param);
 	if (time.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, time_to_julianday(*time));
+		int res = lib_->api.sqlite3_bind_double(stmt_, index, time_to_days(*time));
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -1107,7 +1107,7 @@ TimeOpt SQLiteStatementImpl::get_time_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return julianday_to_time(lib_->api.sqlite3_column_double(stmt_, (int)index - 1));
+	return days_to_time(lib_->api.sqlite3_column_double(stmt_, (int)index - 1));
 }
 
 TimeStampOpt SQLiteStatementImpl::get_timestamp_opt(const IndexOrName& column)

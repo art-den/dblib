@@ -116,6 +116,9 @@ struct DBLIB_API Date
 	int year = 0;
 	int month = 0;
 	int day = 0;
+
+	Date() = default;
+	Date(int year, int month, int day);
 };
 
 DBLIB_API bool operator == (const Date &date1, const Date &date2);
@@ -128,6 +131,10 @@ struct DBLIB_API Time
 	int min = 0;
 	int sec = 0;
 	int msec = 0;
+	int usec = 0;
+
+	Time() = default;
+	Time(int hour, int min, int sec, int msec = 0, int usec = 0);
 };
 
 DBLIB_API bool operator == (const Time &time1, const Time &time2);

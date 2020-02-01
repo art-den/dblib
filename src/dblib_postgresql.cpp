@@ -395,67 +395,91 @@ static ValueType oid_to_value_type(Oid uid)
 	);
 }
 
-static int dblib_date_to_pg_date(const Date &date)
+const int64_t USecsInDay = 24LL * 60LL * 60LL * 1000LL * 1000LL;
+const int DaysBetweenJDayAnd2000Year = 2451545;
+
+int32_t dblib_date_to_pg_date(const Date &date)
 {
-	return date_to_julianday_integer(date) - 2451545;
+	return date_to_julianday_integer(date) - DaysBetweenJDayAnd2000Year;
 }
 
-static int64_t dblib_time_to_pg_time(const Time& time)
+int64_t dblib_time_to_pg_time(const Time& time)
 {
 	int64_t result = time.hour;
-	result *= 24;
+	result *= 60;
 	result += time.min;
 	result *= 60;
 	result += time.sec;
 	result *= 1000;
 	result += time.msec;
 	result *= 1000;
+	result += time.usec;
 	return result;
 }
 
-static int64_t dblib_timestamp_to_pg_timestamp(const TimeStamp& ts)
+int64_t dblib_timestamp_to_pg_timestamp(const TimeStamp& ts)
 {
 	return 
-		(int64_t)dblib_date_to_pg_date(ts.date) * (24LL * 60LL * 60LL * 1000000LL) + 
+		(int64_t)dblib_date_to_pg_date(ts.date) * USecsInDay +
 		dblib_time_to_pg_time(ts.time);
 }
 
-static Date pg_date_to_dblib_date(int pg_date)
+Date pg_date_to_dblib_date(int32_t pg_date)
 {
-	return julianday_integer_to_date(pg_date + 2451545);
+	return julianday_integer_to_date(pg_date + DaysBetweenJDayAnd2000Year);
 }
 
-static Time pg_time_to_dblib_time(int64_t pg_time, int64_t *date_component_result = nullptr)
+Time pg_time_to_dblib_time(int64_t pg_time, int32_t* date_rest)
 {
 	Time result = {};
 
-	pg_time /= 1000; // skip microseconds
+	int64_t positiv_time = [&]
+	{
+		if (pg_time < 0)
+		{
+			int64_t day = pg_time / USecsInDay;
+			return pg_time + (-day + 1) * USecsInDay;
+		}
+		return pg_time;
+	} ();
 
-	result.msec = pg_time % 1000;
+	result.usec = positiv_time % 1000;
+	positiv_time /= 1000;
+	pg_time -= result.usec;
 	pg_time /= 1000;
 
-	result.sec = pg_time % 60;
+	result.msec = positiv_time % 1000;
+	positiv_time /= 1000;
+	pg_time -= result.msec;
+	pg_time /= 1000;
+
+	result.sec = positiv_time % 60;
+	positiv_time /= 60;
+	pg_time -= result.sec;
 	pg_time /= 60;
 
-	result.min = pg_time % 60;
+	result.min = positiv_time % 60;
+	positiv_time /= 60;
+	pg_time -= result.min;
 	pg_time /= 60;
 
-	result.hour = pg_time % 24;
+	result.hour = positiv_time % 24;
+	pg_time -= result.hour;
+	pg_time /= 24;
 
-	if (date_component_result)
-		*date_component_result = pg_time / 24;
+	if (date_rest) *date_rest = (int32_t)pg_time;
 
 	return result;
 }
 
-static TimeStamp pg_ts_to_dblib_ts(int64_t pg_ts)
+TimeStamp pg_ts_to_dblib_ts(int64_t pg_ts)
 {
 	TimeStamp result;
 
-	int64_t date_component = 0;
+	int date_rest = 0;
 
-	result.time = pg_time_to_dblib_time(pg_ts, &date_component);
-	result.date = pg_date_to_dblib_date((int)date_component);
+	result.time = pg_time_to_dblib_time(pg_ts, &date_rest);
+	result.date = pg_date_to_dblib_date(date_rest);
 
 	return result;
 }

@@ -218,7 +218,7 @@ std::string utf16_to_utf8(std::wstring_view wstr, char err_char)
 	return result;
 }
 
-double time_to_julianday(int hour, int min, int sec, int msec)
+double time_to_days(int hour, int min, int sec, int msec)
 {
 	return
 		hour / 24.0 +
@@ -227,9 +227,9 @@ double time_to_julianday(int hour, int min, int sec, int msec)
 		msec / (24.0 * 60.0 * 60.0 * 1000.0);
 }
 
-double time_to_julianday(const Time &time)
+double time_to_days(const Time &time)
 {
-	return time_to_julianday(time.hour, time.min, time.sec, time.msec);
+	return time_to_days(time.hour, time.min, time.sec, time.msec);
 }
 
 double date_to_julianday(int year, int mon, int day)
@@ -237,7 +237,7 @@ double date_to_julianday(int year, int mon, int day)
 	return date_to_julianday_integer(year, mon, day);
 }
 
-int date_to_julianday_integer(int year, int mon, int day)
+int32_t date_to_julianday_integer(int year, int mon, int day)
 {
 	int64_t a = (14 - (int64_t)mon) / 12;
 	int64_t y = (int64_t)year + 4800 - a;
@@ -250,44 +250,50 @@ double date_to_julianday(const Date &date)
 	return date_to_julianday(date.year, date.month, date.day);
 }
 
-int date_to_julianday_integer(const Date& date)
+int32_t date_to_julianday_integer(const Date& date)
 {
 	return date_to_julianday_integer(date.year, date.month, date.day);
 }
 
 double timestamp_to_julianday(int year, int mon, int day, int hour, int min, int sec, int msec)
 {
-	return date_to_julianday(year, mon, day) + time_to_julianday(hour, min, sec, msec);
+	return 
+		date_to_julianday(year, mon, day) 
+		+ time_to_days(hour, min, sec, msec) 
+		- 0.5;
 }
 
 double timestamp_to_julianday(const TimeStamp &ts)
 {
-	return time_to_julianday(ts.time) + date_to_julianday(ts.date);
+	return 
+		date_to_julianday(ts.date) 
+		+ time_to_days(ts.time) 
+		- 0.5;
 }
 
-Time julianday_to_time(double julianday)
+Time days_to_time(double days)
 {
-	julianday -= (int)julianday;
+	days -= (int)days;
 
-	julianday += 1.0 / (24.0 * 60.0 * 60.0 * 1000.0 * 10.0); // + 0.1 msec to compensate double accuracy
+	days += 1.0 / (24.0 * 60.0 * 60.0 * 1000.0 * 10.0); // + 0.1 msec to compensate double accuracy
 
 	Time result;
 
-	julianday *= 24;
-	result.hour = (int)julianday;
-	julianday -= result.hour;
+	days *= 24;
+	result.hour = (int)days;
+	days -= result.hour;
 
-	julianday *= 60;
-	result.min = (int)julianday;
-	julianday -= result.min;
+	days *= 60;
+	result.min = (int)days;
+	days -= result.min;
 
-	julianday *= 60;
-	result.sec = (int)julianday;
-	julianday -= result.sec;
+	days *= 60;
+	result.sec = (int)days;
+	days -= result.sec;
 
-	julianday *= 1000;
-	result.msec = (int)julianday;
-	julianday -= result.msec;
+	days *= 1000;
+	result.msec = (int)days;
+	days -= result.msec;
 
 	return result;
 }
@@ -297,7 +303,7 @@ Date julianday_to_date(double julianday)
 	return julianday_integer_to_date(static_cast<int>(julianday));
 }
 
-Date julianday_integer_to_date(int julianday)
+Date julianday_integer_to_date(int32_t julianday)
 {
 	Date result;
 
@@ -318,7 +324,9 @@ TimeStamp julianday_to_timestamp(double julianday)
 {
 	TimeStamp result;
 
-	result.time = julianday_to_time(julianday);
+	julianday += 0.5;
+
+	result.time = days_to_time(julianday);
 	result.date = julianday_to_date(julianday);
 
 	return result;

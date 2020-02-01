@@ -42,32 +42,32 @@ DBLIB_API std::wstring utf8_to_utf16(std::string_view utf8, char err_char = '?')
 DBLIB_API void utf16_to_utf8(std::wstring_view wstr, std::string& result, char err_char = '?');
 DBLIB_API std::string utf16_to_utf8(std::wstring_view wstr, char err_char = '?');
 
-// Time -> julianday
+// Time -> days
 
-DBLIB_API double time_to_julianday(int hour, int min, int sec, int msec);
-DBLIB_API double time_to_julianday(const Time &time);
+DBLIB_API double time_to_days(int hour, int min, int sec, int msec);
+DBLIB_API double time_to_days(const Time &time);
 
 // Date -> julianday
 
 DBLIB_API double date_to_julianday(int year, int mon, int day);
-DBLIB_API int date_to_julianday_integer(int year, int mon, int day);
+DBLIB_API int32_t date_to_julianday_integer(int year, int mon, int day);
 
 DBLIB_API double date_to_julianday(const Date &date);
-DBLIB_API int date_to_julianday_integer(const Date& date);
+DBLIB_API int32_t date_to_julianday_integer(const Date& date);
 
 // TimeStamp -> julianday
 
 DBLIB_API double timestamp_to_julianday(int year, int mon, int day, int hour, int min, int sec, int msec);
 DBLIB_API double timestamp_to_julianday(const TimeStamp &ts);
 
-// julianday -> Time
+// days -> Time
 
-DBLIB_API Time julianday_to_time(double julianday);
+DBLIB_API Time days_to_time(double days);
 
 // julianday -> Date
 
 DBLIB_API Date julianday_to_date(double julianday);
-DBLIB_API Date julianday_integer_to_date(int julianday);
+DBLIB_API Date julianday_integer_to_date(int32_t julianday);
 
 // julianday -> TimeStamp
 

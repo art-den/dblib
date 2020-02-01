@@ -120,6 +120,12 @@ void Transaction::check_started()
 
 /* struct Date */
 
+Date::Date(int year, int month, int day) :
+	year(year),
+	month(month),
+	day(day)
+{}
+
 static bool dates_equal(const Date& date1, const Date& date2)
 {
 	return
@@ -141,13 +147,22 @@ bool operator != (const Date& date1, const Date& date2)
 
 /* struct Time */
 
+Time::Time(int hour, int min, int sec, int msec, int usec) : 
+	hour(hour),
+	min(min),
+	sec(sec),
+	msec(msec),
+	usec(usec)
+{}
+
 static bool times_equal(const Time& time1, const Time& time2)
 {
 	return
 		(time1.hour == time2.hour) &&
-		(time1.min == time2.min) &&
-		(time1.sec == time2.sec) &&
-		(time1.msec == time2.msec);
+		(time1.min  == time2.min ) &&
+		(time1.sec  == time2.sec ) &&
+		(time1.msec == time2.msec) &&
+		(time1.usec == time2.usec);
 }
 
 bool operator == (const Time& time1, const Time& time2)
@@ -169,7 +184,7 @@ static bool ts_equal(const TimeStamp& ts1, const TimeStamp& ts2)
 		dates_equal(ts1.date, ts2.date) &&
 		times_equal(ts1.time, ts2.time);
 }
-
+ 
 bool operator == (const TimeStamp& ts1, const TimeStamp& ts2)
 {
 	return ts_equal(ts1, ts2);

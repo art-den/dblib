@@ -137,7 +137,7 @@ using Connections = std::vector<ConnectionPtr>;
 
 static void for_all_connections_do(size_t conn_count, const std::function<void (const Connections&)> &fun)
 {
-	if (true)
+	if (false)
 	{
 		Connections fb_conns;
 
@@ -147,7 +147,7 @@ static void for_all_connections_do(size_t conn_count, const std::function<void (
 		fun(fb_conns);
 	}
 
-	if (true)
+	if (false)
 	{
 		Connections sqlite_conns;
 
@@ -157,7 +157,7 @@ static void for_all_connections_do(size_t conn_count, const std::function<void (
 		fun(sqlite_conns);
 	}
 
-	if (false)
+	if (true)
 	{
 		Connections pb_conns;
 
@@ -1462,5 +1462,64 @@ BOOST_AUTO_TEST_CASE(test_fb_services_users)
 	services->delete_user("new_user2");
 	services->delete_user("new_user");
 }
+
+BOOST_AUTO_TEST_SUITE_END()
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOST_AUTO_TEST_SUITE(PosgreSQLMisc)
+
+BOOST_AUTO_TEST_CASE(pg_time)
+{
+	auto check = [&](const Time& time)
+	{
+		auto pg_time_value = dblib_time_to_pg_time(time);
+		auto result_time = pg_time_to_dblib_time(pg_time_value);
+		BOOST_CHECK(time == result_time);
+	};
+
+	check({ 22, 12, 44, 555, 777 });
+	check({ 10, 11, 12,  13,  14 });
+	check({  0,  0,  0,   0,   0 });
+	check({ 23, 59, 59, 999, 999 });
+}
+
+BOOST_AUTO_TEST_CASE(pg_date)
+{
+	auto check = [&](const Date& date)
+	{
+		auto pg_date_value = dblib_date_to_pg_date(date);
+		auto result_date = pg_date_to_dblib_date(pg_date_value);
+		BOOST_CHECK(date == result_date);
+	};
+
+	check({   0,   1, 22 });
+	check({ 999,   1, 31 });
+	check({ 1917,  1,  1 });
+	check({ 1954,  1,  1 });
+	check({ 2021, 11, 21 });
+	check({ 2050, 12, 31 });
+}
+
+BOOST_AUTO_TEST_CASE(pg_timestamp)
+{
+	auto check = [&](const Date& date, const Time& time)
+	{
+		TimeStamp ts;
+		ts.date = date;
+		ts.time = time;
+		auto pg_ts_value = dblib_timestamp_to_pg_timestamp(ts);
+		auto result_ts = pg_ts_to_dblib_ts(pg_ts_value);
+		BOOST_CHECK(ts == result_ts);
+	};
+
+	check({    0,  1,  1 }, {  0,  0,  0,   0,   1 });
+	check({  999,  1,  1 }, {  0,  0,  0,   0,   0 });
+	check({ 1917,  1,  1 }, { 13, 12, 44, 555, 777 });
+	check({ 1954,  1,  1 }, { 11,  0,  0,   0,  11 });
+	check({ 2021, 11, 21 }, { 22, 12, 33, 555, 777 });
+	check({ 2055, 12, 31 }, { 22, 12, 33, 555, 777 });
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
