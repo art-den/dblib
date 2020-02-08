@@ -124,7 +124,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include;$(SolutionDir)..\extra\postgres\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ForcedIncludeFiles>
@@ -145,7 +145,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include;$(SolutionDir)..\extra\postgres\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ForcedIncludeFiles>
@@ -168,7 +168,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include;$(SolutionDir)..\extra\postgres\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ForcedIncludeFiles>
       </ForcedIncludeFiles>
@@ -193,7 +193,7 @@
       <PreprocessorDefinitions>BOOST_ALL_DYN_LINK;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include;$(SolutionDir)..\extra\postgres\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BOOST_LIB);$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ForcedIncludeFiles>
       </ForcedIncludeFiles>

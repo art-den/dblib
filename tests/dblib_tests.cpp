@@ -31,7 +31,6 @@
 #elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 #define DBLIB_WINDOWS
 #include <Windows.h>
-#pragma comment(lib, "libpq.lib") // ???
 #else
 #error "Unsupported platform"
 #endif
@@ -41,6 +40,7 @@ using namespace dblib;
 static std::mutex create_conn_mutex;
 static FbLibPtr fb_lib;
 static SqliteLibPtr sqlite_lib;
+static PgLibPtr pg_lib;
 
 static std::wstring get_executable_path()
 {
@@ -122,6 +122,13 @@ static SqliteConnectionPtr get_sqlite_connection()
 
 static PgConnectionPtr get_postgresql_connection()
 {
+	auto lock = std::lock_guard{ create_conn_mutex };
+	if (!pg_lib)
+	{
+		pg_lib = create_pg_lib();
+		pg_lib->load();
+	}
+
 	PgConnectParams params;
 
 	params.connect_timeout = 10;
@@ -130,7 +137,7 @@ static PgConnectionPtr get_postgresql_connection()
 	params.user = "dblib_test";
 	params.password = "dblib_test";
 
-	return create_pg_connection(params);
+	return pg_lib->create_connection(params); 
 }
 
 using Connections = std::vector<ConnectionPtr>;
