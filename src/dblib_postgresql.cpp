@@ -914,6 +914,8 @@ void PgStatementImpl::prepare(
 	std::string_view sql, 
 	bool             use_native_parameters_syntax)
 {
+	columns_helper_.clear();
+
 	result_.set(nullptr);
 	conn_->skip_previous_data();
 
@@ -985,6 +987,8 @@ void PgStatementImpl::prepare(
 
 void PgStatementImpl::execute(std::string_view sql)
 {
+	columns_helper_.clear();
+
 	result_contains_first_row_data_ = false;
 	contains_data_ = false;
 
