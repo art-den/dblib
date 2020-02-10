@@ -43,6 +43,7 @@ constexpr Oid DATEOID = 1082;
 constexpr Oid TIMEOID = 1083;
 constexpr Oid TIMESTAMPOID = 1114;
 constexpr Oid BYTEAOID = 17;
+constexpr Oid NAMEOID = 19;
 
 
 /* class PGresultHandler */
@@ -381,7 +382,7 @@ static void check_result_status(
 		-1,
 		api.PQresStatus(status),
 		sql_code,
-		api.PQresultErrorMessage(res),
+		api.PQresultVerboseErrorMessage(res, PQERRORS_VERBOSE, PQSHOW_CONTEXT_ALWAYS),
 		sql,
 		error_type
 	);
@@ -433,6 +434,7 @@ static ValueType oid_to_value_type(Oid uid)
 		return ValueType::Double;
 
 	case VARCHAROID:
+	case NAMEOID:
 		return ValueType::Varchar;
 
 	case BPCHAROID:
@@ -571,34 +573,35 @@ void PgLibImpl::load(const std::wstring_view dyn_lib_file_name)
 
 	module.load(file_name_to_load);
 
-	module.load_func(api.PQconnectdbParams,    "PQconnectdbParams");
-	module.load_func(api.PQfinish,             "PQfinish");
-	module.load_func(api.PQstatus,             "PQstatus");
-	module.load_func(api.PQerrorMessage,       "PQerrorMessage");
-	module.load_func(api.PQexec,               "PQexec");
-	module.load_func(api.PQprepare,            "PQprepare");
-	module.load_func(api.PQsendQueryParams,    "PQsendQueryParams");
-	module.load_func(api.PQsendQueryPrepared,  "PQsendQueryPrepared");
-	module.load_func(api.PQsetSingleRowMode,   "PQsetSingleRowMode");
-	module.load_func(api.PQgetResult,          "PQgetResult");
-	module.load_func(api.PQresultStatus,       "PQresultStatus");
-	module.load_func(api.PQresStatus,          "PQresStatus");
-	module.load_func(api.PQresultErrorMessage, "PQresultErrorMessage");
-	module.load_func(api.PQresultErrorField,   "PQresultErrorField");
-	module.load_func(api.PQntuples,            "PQntuples");
-	module.load_func(api.PQnfields,            "PQnfields");
-	module.load_func(api.PQbinaryTuples,       "PQbinaryTuples");
-	module.load_func(api.PQfname,              "PQfname");
-	module.load_func(api.PQftype,              "PQftype");
-	module.load_func(api.PQfsize,              "PQfsize");
-	module.load_func(api.PQcmdTuples,          "PQcmdTuples");
-	module.load_func(api.PQgetvalue,           "PQgetvalue");
-	module.load_func(api.PQgetlength,          "PQgetlength");
-	module.load_func(api.PQgetisnull,          "PQgetisnull");
-	module.load_func(api.PQnparams,            "PQnparams");
-	module.load_func(api.PQparamtype,          "PQparamtype");
-	module.load_func(api.PQdescribePrepared,   "PQdescribePrepared");
-	module.load_func(api.PQclear,              "PQclear");
+	module.load_func(api.PQconnectdbParams,           "PQconnectdbParams");
+	module.load_func(api.PQfinish,                    "PQfinish");
+	module.load_func(api.PQstatus,                    "PQstatus");
+	module.load_func(api.PQerrorMessage,              "PQerrorMessage");
+	module.load_func(api.PQexec,                      "PQexec");
+	module.load_func(api.PQprepare,                   "PQprepare");
+	module.load_func(api.PQsendQueryParams,           "PQsendQueryParams");
+	module.load_func(api.PQsendQueryPrepared,         "PQsendQueryPrepared");
+	module.load_func(api.PQsetSingleRowMode,          "PQsetSingleRowMode");
+	module.load_func(api.PQgetResult,                 "PQgetResult");
+	module.load_func(api.PQresultStatus,              "PQresultStatus");
+	module.load_func(api.PQresStatus,                 "PQresStatus");
+	module.load_func(api.PQresultErrorMessage,        "PQresultErrorMessage");
+	module.load_func(api.PQresultVerboseErrorMessage, "PQresultVerboseErrorMessage");
+	module.load_func(api.PQresultErrorField,          "PQresultErrorField");
+	module.load_func(api.PQntuples,                   "PQntuples");
+	module.load_func(api.PQnfields,                   "PQnfields");
+	module.load_func(api.PQbinaryTuples,              "PQbinaryTuples");
+	module.load_func(api.PQfname,                     "PQfname");
+	module.load_func(api.PQftype,                     "PQftype");
+	module.load_func(api.PQfsize,                     "PQfsize");
+	module.load_func(api.PQcmdTuples,                 "PQcmdTuples");
+	module.load_func(api.PQgetvalue,                  "PQgetvalue");
+	module.load_func(api.PQgetlength,                 "PQgetlength");
+	module.load_func(api.PQgetisnull,                 "PQgetisnull");
+	module.load_func(api.PQnparams,                   "PQnparams");
+	module.load_func(api.PQparamtype,                 "PQparamtype");
+	module.load_func(api.PQdescribePrepared,          "PQdescribePrepared");
+	module.load_func(api.PQclear,                     "PQclear");
 }
 
 bool PgLibImpl::is_loaded() const

@@ -48,8 +48,14 @@ bool CaseInsensitiveComparer::operator() (std::string_view left, std::string_vie
 	auto it1 = left.begin();
 	auto it2 = right.begin();
 	size_t size = left.size();
+
 	for (size_t i = 0; i < size; i++)
-		if (tolower(*it1++) < tolower(*it2++)) return true;
+	{
+		int l1 = tolower(*it1++);
+		int l2 = tolower(*it2++);
+		if (l1 < l2) return true;
+		if (l1 > l2) return false;
+	}
 
 	return false;
 }
