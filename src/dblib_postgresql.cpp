@@ -44,6 +44,7 @@ constexpr Oid TIMEOID = 1083;
 constexpr Oid TIMESTAMPOID = 1114;
 constexpr Oid BYTEAOID = 17;
 constexpr Oid NAMEOID = 19;
+constexpr Oid TEXTOID = 25;
 
 
 /* class PGresultHandler */
@@ -336,12 +337,16 @@ public:
 
 	void append_if_seq_data(const std::string& data, const std::string& other, std::string& sql) const override
 	{
-
+		sql.append(data);
+		sql.append(other);
 	}
 
 	void append_seq_generator(const std::string& seq_name, const std::string& other, std::string& sql) const override
 	{
-
+		sql.append("nextval('");
+		sql.append(seq_name);
+		sql.append("')");
+		sql.append(other);
 	}
 
 private:
@@ -435,6 +440,7 @@ static ValueType oid_to_value_type(Oid uid)
 
 	case VARCHAROID:
 	case NAMEOID:
+	case TEXTOID:
 		return ValueType::Varchar;
 
 	case BPCHAROID:
