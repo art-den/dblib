@@ -271,7 +271,7 @@ static void check_sqlite_ret_code(
 	if (ret_code == SQLITE_OK) return;
 
 	if (ret_code == SQLITE_BUSY)
-		error_type = ErrorType::Deadlock;
+		error_type = ErrorType::Lock;
 
 	throw_exception(
 		fun_name,

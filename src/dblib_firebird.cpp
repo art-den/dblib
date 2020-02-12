@@ -762,7 +762,7 @@ static void check_status_vector(
 	}
 
 	if (update_conflict) 
-		error_type = ErrorType::Deadlock;
+		error_type = ErrorType::Lock;
 
 	// throw
 	throw_exception(

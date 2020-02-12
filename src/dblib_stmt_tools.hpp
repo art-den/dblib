@@ -112,7 +112,7 @@ enum class ErrorType
 {
 	Normal,
 	Transaction,
-	Deadlock,
+	Lock,
 	Connection
 };
 

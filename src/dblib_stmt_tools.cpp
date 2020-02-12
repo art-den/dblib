@@ -354,8 +354,8 @@ void throw_exception(
 	case ErrorType::Connection:
 		throw ConnectException(error_text, code, extended_code);
 
-	case ErrorType::Deadlock:
-		throw DeadlockException(error_text, code, extended_code);
+	case ErrorType::Lock:
+		throw LockException(error_text, code, extended_code);
 
 	case ErrorType::Normal:
 	default:

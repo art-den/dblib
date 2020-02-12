@@ -173,7 +173,7 @@ public:
 	SharedLibProcNotFoundError(const char* proc_name);
 };
 
-class DBLIB_API DeadlockException : public TransactionException
+class DBLIB_API LockException : public TransactionException
 {
 public:
 	using TransactionException::TransactionException;

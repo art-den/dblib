@@ -378,8 +378,8 @@ static void check_result_status(
 
 	std::string sql_code = api.PQresultErrorField(res, PG_DIAG_SQLSTATE);
 
-	if ((sql_code == "55P03") || (sql_code == "40P01"))
-		error_type = ErrorType::Deadlock;
+	if ((sql_code == "55P03") || (sql_code == "40P01") || (sql_code == "40001"))
+		error_type = ErrorType::Lock;
 
 	throw_exception(
 		fun_name,
