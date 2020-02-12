@@ -596,7 +596,7 @@ BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
 			st2->execute("update tr_deadlock_test set int_fld2 = 20 where int_fld1 = 1");
 			BOOST_CHECK(false);
 		}
-		catch (const DeadlockException&)
+		catch (const LockException&)
 		{
 			BOOST_CHECK(true);
 		}
@@ -1082,7 +1082,11 @@ BOOST_AUTO_TEST_CASE(col_names_test)
 		auto &connection = *connections[0];
 		connection.connect();
 
-		exec_no_throw(connection, { "drop table col_names_test" });
+		exec_no_throw(connection, { 
+			"drop table col_names_test",
+			"drop table col_names_test2"
+		});
+
 		exec(connection, {
 			"create table col_names_test ("
 				"int_fld    integer, "
@@ -1092,7 +1096,15 @@ BOOST_AUTO_TEST_CASE(col_names_test)
 			")",
 
 			"insert into col_names_test(int_fld, flt_fld, vchar_fld1, vchar_fld2) "
-			"values(22, 33.0, 'wow', 'blabla')"
+			"values(22, 33.0, 'wow', 'blabla')",
+
+			"create table col_names_test2 ("
+				"vchar_fld2 varchar(256) "
+			")",
+
+			"insert into col_names_test2(vchar_fld2) "
+			"values('blabla-2')",
+
 		});
 
 		auto tran = connection.create_transaction();
@@ -1134,6 +1146,11 @@ BOOST_AUTO_TEST_CASE(col_names_test)
 		BOOST_CHECK(iequals(st->get_column_name(3), "flt_fld"));
 		BOOST_CHECK(iequals(st->get_column_name(4), "vchar_fld1"));
 		BOOST_CHECK(iequals(st->get_column_name(5), "vchar_fld2"));
+
+		st->execute("select * from col_names_test2");
+		BOOST_CHECK(st->get_columns_count() == 1);
+		st->fetch();
+		BOOST_CHECK(st->get_str_utf8("vchar_fld2") == "blabla-2");
 	});
 }
 
