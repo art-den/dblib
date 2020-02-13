@@ -172,6 +172,7 @@ private:
 	PgLibDataPtr lib_;
 	PgConnectionImplPtr conn_;
 	TransactionParams params_;
+	std::string sql_;
 
 	void exec(const char *sql);
 };
@@ -829,44 +830,44 @@ StatementPtr PgTransactionImpl::create_statement()
 
 void PgTransactionImpl::internal_start()
 {
-	std::string sql = "BEGIN TRANSACTION";
+	sql_ = "BEGIN TRANSACTION";
 
 	switch (params_.level)
 	{
 	case TransactionLevel::Serializable:
-		sql.append(" ISOLATION LEVEL SERIALIZABLE");
+		sql_.append(" ISOLATION LEVEL SERIALIZABLE");
 		break;
 
 	case TransactionLevel::RepeatableRead:
-		sql.append(" ISOLATION LEVEL REPEATABLE READ");
+		sql_.append(" ISOLATION LEVEL REPEATABLE READ");
 		break;
 
 	case TransactionLevel::ReadCommitted:
-		sql.append(" ISOLATION LEVEL READ COMMITTED");
+		sql_.append(" ISOLATION LEVEL READ COMMITTED");
 		break;
 
 	case TransactionLevel::DirtyRead:
-		sql.append(" ISOLATION LEVEL READ UNCOMMITTED");
+		sql_.append(" ISOLATION LEVEL READ UNCOMMITTED");
 		break;
 	}
 
 	switch (params_.access)
 	{
 	case TransactionAccess::Read:
-		sql.append(" READ ONLY");
+		sql_.append(" READ ONLY");
 		break;
 
 	case TransactionAccess::ReadAndWrite:
-		sql.append(" READ WRITE");
+		sql_.append(" READ WRITE");
 		break;
 	}
 
 	// TODO: DEFERRABLE
 
-	exec(sql.c_str());
+	exec(sql_.c_str());
 
-	sql = "SET LOCAL lock_timeout = '" + std::to_string(params_.lock_time_out) + "s';";
-	exec(sql.c_str());
+	sql_ = "SET LOCAL lock_timeout = '" + std::to_string(params_.lock_time_out) + "s';";
+	exec(sql_.c_str());
 }
 
 void PgTransactionImpl::internal_commit()
