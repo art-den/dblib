@@ -1130,7 +1130,7 @@ size_t SQLiteStatementImpl::get_blob_size(const IndexOrName& column)
 	check_is_prepared();
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
-	if (is_null_impl(index)) throw ColumnValueIsNullException();
+	if (is_null_impl(index)) throw ColumnValueIsNullException(column.to_str());
 	return lib_->api.sqlite3_column_bytes(stmt_, (int)index - 1);
 }
 
@@ -1139,7 +1139,7 @@ void SQLiteStatementImpl::get_blob_data(const IndexOrName& column, char *dst, si
 	check_is_prepared();
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
-	if (is_null_impl(index)) throw ColumnValueIsNullException();
+	if (is_null_impl(index)) throw ColumnValueIsNullException(column.to_str());
 	int blob_size = lib_->api.sqlite3_column_bytes(stmt_, (int)index - 1);
 
 	if (size > (size_t)blob_size)

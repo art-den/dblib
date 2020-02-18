@@ -2430,7 +2430,7 @@ size_t FbStatementImpl::get_blob_size(const IndexOrName& column)
 	auto index = columns_helper_.get_column_index(column);
 	out_sqlda_.check_index(index);
 	if (out_sqlda_.is_null(index))
-		throw ColumnValueIsNullException();
+		throw ColumnValueIsNullException(column.to_str());
 
 	return out_sqlda_.get_blob_size(lib_->api, index, *conn_, *tran_);
 }
@@ -2441,7 +2441,7 @@ void FbStatementImpl::get_blob_data(const IndexOrName& column, char* dst, size_t
 	check_has_data();
 	auto index = columns_helper_.get_column_index(column);
 	out_sqlda_.check_index(index);
-	if (out_sqlda_.is_null(index)) throw ColumnValueIsNullException();
+	if (out_sqlda_.is_null(index)) throw ColumnValueIsNullException(column.to_str());
 	out_sqlda_.read_blob(lib_->api, index, dst, dst + size, *conn_, *tran_);
 }
 

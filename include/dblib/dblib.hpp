@@ -174,6 +174,8 @@ public:
 	size_t get_index() const;
 	std::string_view get_name() const;
 
+	std::string to_str() const;
+
 private:
 	std::variant<size_t, std::string_view> value_;
 };

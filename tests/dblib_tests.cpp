@@ -807,50 +807,6 @@ BOOST_AUTO_TEST_CASE(binds_test)
 		BOOST_CHECK(st->get_str_utf8(4) == "the text");
 		BOOST_CHECK(st->get_wstr(4) == L"the text");
 		BOOST_CHECK(!st->fetch());
-
-		// is_null
-		st->execute("delete from binds_test");
-		st->execute("insert into binds_test(n, int_fld) values(1, 10)");
-		st->execute("insert into binds_test(n, flt_fld) values(2, 20)");
-		st->execute("insert into binds_test(n, big_fld) values(3, 30)");
-		st->execute("insert into binds_test(n, int_fld) values(4, 40)");
-		st->execute("insert into binds_test(n, flt_fld) values(5, 50)");
-		st->execute("insert into binds_test(n, big_fld) values(6, 60)");
-
-		st->execute("select int_fld, flt_fld, big_fld from binds_test order by n");
-
-		BOOST_CHECK(st->fetch());
-
-		BOOST_CHECK(!st->is_null(1));
-		BOOST_CHECK(st->is_null(2));
-		BOOST_CHECK(st->is_null(3));
-
-		BOOST_CHECK(st->fetch());
-		BOOST_CHECK(st->is_null(1));
-		BOOST_CHECK(!st->is_null(2));
-		BOOST_CHECK(st->is_null(3));
-
-		BOOST_CHECK(st->fetch());
-		BOOST_CHECK(st->is_null(1));
-		BOOST_CHECK(st->is_null(2));
-		BOOST_CHECK(!st->is_null(3));
-
-		BOOST_CHECK(st->fetch());
-		BOOST_CHECK(!st->is_null(1));
-		BOOST_CHECK(st->is_null(2));
-		BOOST_CHECK(st->is_null(3));
-
-		BOOST_CHECK(st->fetch());
-		BOOST_CHECK(st->is_null(1));
-		BOOST_CHECK(!st->is_null(2));
-		BOOST_CHECK(st->is_null(3));
-
-		BOOST_CHECK(st->fetch());
-		BOOST_CHECK(st->is_null(1));
-		BOOST_CHECK(st->is_null(2));
-		BOOST_CHECK(!st->is_null(3));
-
-		BOOST_CHECK(!st->fetch());
 	});
 }
 
@@ -1072,6 +1028,107 @@ BOOST_AUTO_TEST_CASE(parameters_and_fetch)
 	});
 }
 
+
+BOOST_AUTO_TEST_CASE(query_result_test)
+{
+	for_all_connections_do(1, [](const Connections &connections)
+	{
+		auto &connection = *connections[0];
+		connection.connect();
+
+		exec_no_throw(connection, { "drop table query_result_test" });
+		exec(connection, {
+			"create table query_result_test ("
+				"n          integer, "
+				"big_fld    bigint, "
+				"int_fld    integer, "
+				"flt_fld    float, "
+				"vchar_fld1 varchar(256), "
+				"vchar_fld2 varchar(256) "
+			")"
+		});
+		auto tran = connection.create_transaction();
+		auto st = tran->create_statement();
+
+		// is_null
+
+		st->execute("delete from query_result_test");
+		st->execute("insert into query_result_test(n, int_fld) values(1, 10)");
+		st->execute("insert into query_result_test(n, flt_fld) values(2, 20)");
+		st->execute("insert into query_result_test(n, big_fld) values(3, 30)");
+		st->execute("insert into query_result_test(n, int_fld) values(4, 40)");
+		st->execute("insert into query_result_test(n, flt_fld) values(5, 50)");
+		st->execute("insert into query_result_test(n, big_fld) values(6, 60)");
+
+		st->execute("select int_fld, flt_fld, big_fld from query_result_test order by n");
+
+		BOOST_CHECK(st->fetch());
+
+		BOOST_CHECK(!st->is_null(1));
+		BOOST_CHECK(st->is_null(2));
+		BOOST_CHECK(st->is_null(3));
+
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->is_null(1));
+		BOOST_CHECK(!st->is_null(2));
+		BOOST_CHECK(st->is_null(3));
+
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->is_null(1));
+		BOOST_CHECK(st->is_null(2));
+		BOOST_CHECK(!st->is_null(3));
+
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(!st->is_null(1));
+		BOOST_CHECK(st->is_null(2));
+		BOOST_CHECK(st->is_null(3));
+
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->is_null(1));
+		BOOST_CHECK(!st->is_null(2));
+		BOOST_CHECK(st->is_null(3));
+
+		BOOST_CHECK(st->fetch());
+		BOOST_CHECK(st->is_null(1));
+		BOOST_CHECK(st->is_null(2));
+		BOOST_CHECK(!st->is_null(3));
+
+		BOOST_CHECK(!st->fetch());
+
+		// ColumnValueIsNullException and default values
+
+		st->execute("delete from query_result_test");
+		st->execute("insert into query_result_test(n, int_fld) values(1, 10)");
+		st->execute("select big_fld, int_fld from query_result_test");
+
+		BOOST_CHECK(st->fetch());
+
+		// Tests for null result
+
+		BOOST_CHECK(st->is_null(1));
+
+		try
+		{
+			BOOST_CHECK(st->get_int64(1));
+			BOOST_CHECK(false);
+		}
+		catch (const ColumnValueIsNullException&)
+		{
+			BOOST_CHECK(true);
+		}
+
+		BOOST_CHECK(!st->get_int64_opt(1)); // optional returns {}
+
+		BOOST_CHECK(st->get_int64_or(1, 333) == 333);
+
+		// Tests for not null results
+
+		BOOST_CHECK(!st->is_null(2));
+		BOOST_CHECK(st->get_int64(2) == 10);
+		BOOST_CHECK(st->get_int64_opt(2) == 10);
+		BOOST_CHECK(st->get_int64_or(2, 333) == 10);
+	});
+}
 
 BOOST_AUTO_TEST_CASE(col_names_test)
 {

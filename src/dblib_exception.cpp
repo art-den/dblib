@@ -186,9 +186,16 @@ char const* ConnectionLostException::what() const
 
 // ColumnValueIsNullException
 
+ColumnValueIsNullException::ColumnValueIsNullException(std::string_view column_name)
+{
+	error_text_.append("Value of column ");
+	error_text_.append(column_name);
+	error_text_.append(" is NULL");
+}
+
 char const* ColumnValueIsNullException::what() const
 {
-	return "Column value is NULL";
+	return error_text_.c_str();
 }
 
 

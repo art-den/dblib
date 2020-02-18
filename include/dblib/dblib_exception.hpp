@@ -152,7 +152,11 @@ public:
 class DBLIB_API ColumnValueIsNullException : public Exception
 {
 public:
+	ColumnValueIsNullException(std::string_view column_name);
 	char const* what() const override;
+
+private:
+	std::string error_text_;
 };
 
 class DBLIB_API EmptyParameterNameException : public Exception

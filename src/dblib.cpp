@@ -240,6 +240,14 @@ std::string_view IndexOrName::get_name() const
 	return std::get<std::string_view>(value_);
 }
 
+std::string IndexOrName::to_str() const
+{
+	return
+		std::holds_alternative<size_t>(value_) ?
+		std::to_string(std::get<size_t>(value_)) :
+		std::string(std::get<std::string_view>(value_));
+}
+
 
 /* class Statement */
 
@@ -386,7 +394,7 @@ void Statement::set(const IndexOrName& param, const TimeStamp& ts)
 int32_t Statement::get_int32(const IndexOrName& column)
 {
 	auto result = get_int32_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -400,7 +408,7 @@ int32_t Statement::get_int32_or(const IndexOrName& column, int32_t value_if_null
 int64_t Statement::get_int64(const IndexOrName& column)
 {
 	auto result = get_int64_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -414,7 +422,7 @@ int64_t Statement::get_int64_or(const IndexOrName& column, int64_t value_if_null
 float Statement::get_float(const IndexOrName& column)
 {
 	auto result = get_float_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -428,7 +436,7 @@ float Statement::get_float_or(const IndexOrName& column, float value_if_null)
 double Statement::get_double(const IndexOrName& column)
 {
 	auto result = get_double_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -442,7 +450,7 @@ double Statement::get_double_or(const IndexOrName& column, double value_if_null)
 std::string Statement::get_str_utf8(const IndexOrName& column)
 {
 	auto result = get_str_utf8_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -456,7 +464,7 @@ std::string Statement::get_str_utf8_or(const IndexOrName& column, std::string_vi
 std::wstring Statement::get_wstr(const IndexOrName& column)
 {
 	auto result = get_wstr_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -470,7 +478,7 @@ std::wstring Statement::get_wstr_or(const IndexOrName& column, std::wstring_view
 Date Statement::get_date(const IndexOrName& column)
 {
 	auto result = get_date_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -484,7 +492,7 @@ Date Statement::get_date_or(const IndexOrName& column, const Date& value_if_null
 Time Statement::get_time(const IndexOrName& column)
 {
 	auto result = get_time_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
@@ -498,7 +506,7 @@ Time Statement::get_time_or(const IndexOrName& column, const Time& value_if_null
 TimeStamp Statement::get_timestamp(const IndexOrName& column)
 {
 	auto result = get_timestamp_opt(column);
-	if (!result) throw ColumnValueIsNullException();
+	if (!result) throw ColumnValueIsNullException(column.to_str());
 	return *result;
 }
 
