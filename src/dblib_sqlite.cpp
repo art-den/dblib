@@ -853,7 +853,7 @@ int SQLiteStatementImpl::get_param_index(const IndexOrName& param)
 
 	int result = lib_->api.sqlite3_bind_parameter_index(stmt_, parameter_name_tmp_.c_str());
 	if (result == 0)
-		throw ParameterNotFoundException();
+		throw ParameterNotFoundException(param.to_str());
 
 	return result;
 }

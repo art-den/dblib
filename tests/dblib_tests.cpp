@@ -1029,6 +1029,34 @@ BOOST_AUTO_TEST_CASE(parameters_and_fetch)
 }
 
 
+BOOST_AUTO_TEST_CASE(wrong_parameters_test)
+{
+	for_all_connections_do(1, [](const Connections &connections)
+	{
+		auto &connection = *connections[0];
+		connection.connect();
+
+		exec_no_throw(connection, { "drop table wrong_parameters_test" });
+		exec(connection, { "create table wrong_parameters_test (n integer, int_fld integer)" });
+
+		auto tran = connection.create_transaction();
+		auto st = tran->create_statement();
+
+		st->prepare("insert into wrong_parameters_test(n) values(@blabla)");
+
+		try
+		{
+			st->set_int32("@blabla2", 3);
+			BOOST_CHECK(false);
+		}
+		catch (const ParameterNotFoundException&)
+		{
+			BOOST_CHECK(true);
+		}
+	});
+}
+
+
 BOOST_AUTO_TEST_CASE(query_result_test)
 {
 	for_all_connections_do(1, [](const Connections &connections)
@@ -1130,6 +1158,7 @@ BOOST_AUTO_TEST_CASE(query_result_test)
 	});
 }
 
+
 BOOST_AUTO_TEST_CASE(col_names_test)
 {
 	using boost::iequals;
@@ -1179,6 +1208,16 @@ BOOST_AUTO_TEST_CASE(col_names_test)
 		BOOST_CHECK(iequals(st->get_column_name(4), "vchar_fld2"));
 
 		st->fetch();
+
+		try
+		{
+			st->get_int32("int_fld_not_exist");
+			BOOST_CHECK(false);
+		}
+		catch (const ColumnNotFoundException&)
+		{
+			BOOST_CHECK(true);
+		}
 
 		BOOST_CHECK(st->get_columns_count() == 4);
 		BOOST_CHECK(iequals(st->get_column_name(1), "int_fld"));

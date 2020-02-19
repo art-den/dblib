@@ -113,7 +113,7 @@ void SqlPreprocessor::do_for_param_indexes(const IndexOrName& param, const std::
 		}
 
 		if (!param_indices)
-			throw WrongArgumentException("Parameter not found!");
+			throw ParameterNotFoundException(param.to_str());
 
 		for (auto param_index : *param_indices)
 			fun(param_index);
@@ -301,7 +301,7 @@ size_t ColumnsHelper::get_column_index(const IndexOrName& column)
 
 	auto it = index_by_name_.find(column.get_name());
 	if (it == index_by_name_.end())
-		throw ColumnNotFoundException();
+		throw ColumnNotFoundException(column.to_str());
 
 	return it->second;
 }

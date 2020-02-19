@@ -154,17 +154,31 @@ char const* WrongColumnType::what() const
 
 // ColumnNotFoundException
 
+ColumnNotFoundException::ColumnNotFoundException(std::string_view column_name)
+{
+	error_text_.append("Column ");
+	error_text_.append(column_name);
+	error_text_.append(" not found");
+}
+
 char const* ColumnNotFoundException::what() const
 {
-	return "Column not found";
+	return error_text_.c_str();
 }
 
 
 // ParameterNotFoundException
 
+ParameterNotFoundException::ParameterNotFoundException(std::string_view param_name)
+{
+	error_text_.append("Parameter ");
+	error_text_.append(param_name);
+	error_text_.append(" not found");
+}
+
 char const* ParameterNotFoundException::what() const
 {
-	return "Parameter not found";
+	return error_text_.c_str();
 }
 
 

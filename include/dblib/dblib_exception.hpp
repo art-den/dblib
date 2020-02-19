@@ -128,13 +128,21 @@ public:
 class DBLIB_API ColumnNotFoundException : public Exception
 {
 public:
+	ColumnNotFoundException(std::string_view column_name);
 	char const* what() const override;
+
+private:
+	std::string error_text_;
 };
 
 class DBLIB_API ParameterNotFoundException : public Exception
 {
 public:
+	ParameterNotFoundException(std::string_view param_name);
 	char const* what() const override;
+
+private:
+	std::string error_text_;
 };
 
 class DBLIB_API FunctionalityNotSupported : public Exception
