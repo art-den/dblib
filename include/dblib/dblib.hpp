@@ -58,7 +58,7 @@ public:
 	LockResolution lock_resolution = LockResolution::Wait;
 	bool autostart = true;
 	bool auto_commit_on_destroy = true;
-	uint32_t lock_time_out = 1; // seconds
+	int lock_time_out = -1; // seconds. -1 - no set timeout
 };
 
 
@@ -80,6 +80,12 @@ public:
 
 	virtual void direct_execute(std::string_view sql) = 0;
 	virtual std::string get_driver_name() const = 0;
+
+	void set_default_transaction_lock_timeout(int value_is_seconds);
+	int get_default_transaction_lock_timeout() const;
+
+private:
+	int default_transaction_lock_timeout_ = -1;
 };
 
 typedef std::shared_ptr<Connection> ConnectionPtr;

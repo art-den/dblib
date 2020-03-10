@@ -137,7 +137,7 @@ private:
 	SqliteConnectionImplPtr conn_;
 
 	bool commit_on_destroy_ = true;
-	uint32_t busy_time_out_ = 0;
+	int busy_time_out_ = 0;
 };
 
 using SQLiteTransactionImplPtr = std::shared_ptr<SQLiteTransactionImpl>;
@@ -599,7 +599,15 @@ SQLiteTransactionImpl::SQLiteTransactionImpl(
 	conn_(conn)
 {
 	commit_on_destroy_ = transaction_params.auto_commit_on_destroy;
-	busy_time_out_ = 1000 * transaction_params.lock_time_out;
+
+	auto lock_time_out = transaction_params.lock_time_out;
+	if (lock_time_out == -1)
+		lock_time_out = conn_->get_default_transaction_lock_timeout();
+
+	if (lock_time_out != -1)
+		busy_time_out_ = 1000 * lock_time_out;
+	else
+		lock_time_out = -1;
 }
 
 SQLiteTransactionImpl::~SQLiteTransactionImpl()
@@ -633,8 +641,10 @@ void SQLiteTransactionImpl::internal_start()
 	if (conn_->is_transaction_active())
 		throw WrongSeqException("Only one transaction is allowed per one SQLite connection");
 
-	if (busy_time_out_ != 0)
+	if (busy_time_out_ != -1)
 		lib_->api.sqlite3_busy_timeout(conn_->get_instance(), busy_time_out_);
+	else 
+		lib_->api.sqlite3_busy_timeout(conn_->get_instance(), 0);
 
 	const char* sql = "begin";
 	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);

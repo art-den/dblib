@@ -1275,12 +1275,16 @@ FbTransactionImpl::FbTransactionImpl(
 
 	switch (transaction_params.lock_resolution)
 	{
-	case LockResolution::Wait:
-		tpb_.add_uint8(isc_tpb_wait);
-		tpb_.add_uint32_with_len(
-			isc_tpb_lock_timeout,
-			transaction_params.lock_time_out
-		);
+	case LockResolution::Wait: 
+		{
+			auto lock_time_out = transaction_params.lock_time_out;
+			if (lock_time_out == -1) 
+				lock_time_out = conn->get_default_transaction_lock_timeout();
+	
+			tpb_.add_uint8(isc_tpb_wait);
+			if (lock_time_out != -1)
+				tpb_.add_uint32_with_len(isc_tpb_lock_timeout, lock_time_out);
+		}
 		break;
 
 	case LockResolution::Nowait:

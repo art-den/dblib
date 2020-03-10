@@ -866,8 +866,15 @@ void PgTransactionImpl::internal_start()
 
 	exec(sql_.c_str());
 
-	sql_ = "SET LOCAL lock_timeout = '" + std::to_string(params_.lock_time_out) + "s';";
-	exec(sql_.c_str());
+	auto lock_time_out = params_.lock_time_out;
+	if (lock_time_out == -1)
+		lock_time_out = conn_->get_default_transaction_lock_timeout();
+
+	if (lock_time_out != -1)
+	{
+		sql_ = "SET LOCAL lock_timeout = '" + std::to_string(lock_time_out) + "s';";
+		exec(sql_.c_str());
+	}
 }
 
 void PgTransactionImpl::internal_commit()

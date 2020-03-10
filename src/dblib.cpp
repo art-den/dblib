@@ -55,6 +55,16 @@ TransactionParams::TransactionParams(LockResolution lock_resolution, bool autost
 Connection::~Connection()
 {}
 
+void Connection::set_default_transaction_lock_timeout(int value_is_seconds)
+{
+	default_transaction_lock_timeout_ = value_is_seconds;
+}
+
+int Connection::get_default_transaction_lock_timeout() const
+{
+	return default_transaction_lock_timeout_;
+}
+
 
 /* class Transaction */
 
