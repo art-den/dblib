@@ -122,3 +122,23 @@ int main()
 	st->set_int32_opt(":value_to_delete", value);
 	st->execute();
 ```
+
+### Simple transaction example
+```cpp
+	// 1st way. Creating and use dblib::Transaction
+
+	auto transaction1 = conn->create_transaction(); // transactions have autostart flag on by default
+	auto st1 = transaction1->create_statement();
+	st1->execute("create table transact_table1 (val  integer)");
+	transaction1->commit();
+
+	// 2nd way. Use dblib::statement function for transactions
+
+	auto st2 = conn->create_transaction()->create_statement();
+	st2->execute("create table transact_table2 (val integer)");
+
+	st2->commit_and_start_transaction(); // commit and then begin transaction
+
+	st2->execute("insert into transact_table2(val) values (555)");
+	st2->rollback_transaction();
+```
