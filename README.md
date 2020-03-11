@@ -162,7 +162,7 @@ int main()
 	tp.lock_resolution = LockResolution::Wait;
 	tp.autostart = false;
 	tp.auto_commit_on_destroy = true;
-	tp.lock_time_out = 333; // in seeconds
+	tp.lock_time_out = 333; // value in seconds
 
 	auto transaction4 = conn->create_transaction(tp);
 
