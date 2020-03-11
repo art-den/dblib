@@ -142,3 +142,26 @@ int main()
 	st2->execute("insert into transact_table2(val) values (555)");
 	st2->rollback_transaction();
 ```
+
+### Misc
+```cpp
+	// How much changed were done during last statemment execution?
+
+	st->execute("delete from simple_table");
+
+	printf(
+		"%d tuples deleted\n",
+		st->get_changes_count()
+	);
+
+	// ID of last inserted row (SQLite only)
+
+	st->execute("create table table_pk(pk integer primary key, int_value integer)");
+
+	st->execute("insert into table_pk(int_value) values(333)");
+
+	printf(
+		"Last inserted PK is %d\n",
+		(int32_t)st->get_last_row_id()
+	);
+```
