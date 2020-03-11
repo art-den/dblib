@@ -40,8 +40,8 @@ int main()
 
 	// fill table via prepared statement with indexed parameter
 
-	st->prepare("insert into simple_table(fld) values (?1)");
-	st->set_int32(1, 42); // index of 1st parameter is 1
+	st->prepare("insert into simple_table(fld) values (?1)"); // ?1 means parameter with index 1
+	st->set_int32(1, 42);
 	st->execute();
 
 	// fill table via prepared statement with named parameter
