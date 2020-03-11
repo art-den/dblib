@@ -41,7 +41,7 @@ int main()
 	// fill table via prepared statement with indexed parameter
 
 	st->prepare("insert into simple_table(fld) values (?1)");
-	st->set_int32(1, 42);
+	st->set_int32(1, 42); // index of 1st parameter is 1
 	st->execute();
 
 	// fill table via prepared statement with named parameter
@@ -55,7 +55,7 @@ int main()
 	st->execute("select * from simple_table");
 	while (st->fetch())
 	{
-		printf("fld by index = %d\n", st->get_int32(1));
+		printf("fld by index = %d\n", st->get_int32(1)); // index of 1st field is 1
 		printf("fld by name = %d\n", st->get_int32("fld"));
 	}
 
@@ -141,6 +141,34 @@ int main()
 
 	st2->execute("insert into transact_table2(val) values (555)");
 	st2->rollback_transaction();
+```
+# Type conversion
+Library automatically converts type of parameters and result fields
+```cpp
+	// type conversion for parameter values
+
+	st->prepare("insert into simple_table (fld) values(:value)");
+
+	st->set_int32(":value", 111); // no type conversion. param is integer
+	st->execute();
+
+	st->set_u8str(":value", "777"); // string -> integer
+	st->execute();
+
+	st->set_double(":value", 123.0); // double -> integer
+	st->execute();
+
+	// type conversion for query result
+
+	st->execute("select fld from simple_table");
+
+	if (st->fetch())
+	{
+		int int_value = st->get_int32("fld"); // no conversion
+		std::string str_value = st->get_str_utf8("fld"); // integer -> string
+		double double_value = st->get_double("fld"); // integer -> double
+		float float_value = st->get_float("fld"); // integer -> float
+	}
 ```
 
 ### Misc
