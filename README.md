@@ -45,6 +45,8 @@ int main()
 	st->execute();
 
 	// fill table via prepared statement with named parameter
+	// here is exapmple with :val, but @val and $val placeholders are 
+	// also supported
 
 	st->prepare("insert into simple_table(fld) values (:val)");
 	st->set_int32(":val", 4242);
