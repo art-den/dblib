@@ -68,3 +68,36 @@ int main()
 	printf("1st column type is = %s\n", field_type_to_string(st->get_column_type(1)).c_str());
 }
 ```
+
+### Null in query result
+```cpp
+	st->execute("insert into simple_table(fld) values (null)");
+
+	st->execute("select * from simple_table");
+	while (st->fetch())
+	{
+		// 1st way. Use is_null()
+
+		if (st->is_null("fld"))
+			printf("fld is null\n");
+		else
+			printf("fld is %d\n", st->get_int32("fld"));
+
+		// 2nd way. Use std::optional return result of get_*_opt funtions
+
+		auto fld_res = st->get_int32_opt("fld");
+
+		if (!fld_res)
+			printf("fld is null\n");
+		else
+			printf("fld is %d\n", *fld_res);
+
+		// 3rd way. Use default result values (get_*_or functions)
+
+		auto fld_value = st->get_int32_or("fld", -1);
+		if (fld_value == -1)
+			printf("fld is null or -1\n");
+		else
+			printf("fld is %d\n", fld_value);
+	}
+```
