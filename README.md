@@ -101,3 +101,24 @@ int main()
 			printf("fld is %d\n", fld_value);
 	}
 ```
+
+### Null as parameter in prepared statement
+```cpp
+	st->prepare("delete from simple_table where fld=:value_to_delete");
+
+	// 1st way. Use set_null
+
+	st->set_null(":value_to_delete");
+	st->execute();
+
+	// 2nd way. Use std::optional for parameter value
+
+	std::optional<int> value = {}; // value is null
+
+	st->set_int32_opt(":value_to_delete", value);
+	st->execute();
+
+	value = 42;
+	st->set_int32_opt(":value_to_delete", value);
+	st->execute();
+```
