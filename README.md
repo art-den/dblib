@@ -158,7 +158,6 @@ int main()
 
 	TransactionParams tp;
 	tp.access = TransactionAccess::Read;
-	tp.access = TransactionAccess::ReadAndWrite;
 	tp.level = TransactionLevel::RepeatableRead;
 	tp.lock_resolution = LockResolution::Wait;
 	tp.autostart = false;
