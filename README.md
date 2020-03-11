@@ -167,6 +167,16 @@ int main()
 	auto transaction4 = conn->create_transaction(tp);
 
 	transaction4->start();
+	
+	// Default transaction level for connection
+
+	conn->set_default_transaction_level(TransactionLevel::ReadCommitted);
+
+	// Default transaction lock time out for connection
+
+	conn->set_default_transaction_lock_timeout(12);
+
+	auto transaction5 = conn->create_transaction(); // ReadCommitted and 12s timeout
 ```
 
 ### Type conversion
