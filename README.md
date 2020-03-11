@@ -144,7 +144,33 @@ int main()
 	st2->execute("insert into transact_table2(val) values (555)");
 	st2->rollback_transaction();
 ```
-# Type conversion
+### Little more extended transaction example
+```cpp
+	// Transaction parameters (ignored for SQLite):
+
+	// read only transaction
+
+	auto transaction3 = conn->create_transaction(TransactionAccess::Read);
+	auto st3 = transaction3->create_statement();
+	st3->execute("delete from simple_table"); // Ups... Not allowed
+
+	// More transaction parameters
+
+	TransactionParams tp;
+	tp.access = TransactionAccess::Read;
+	tp.access = TransactionAccess::ReadAndWrite;
+	tp.level = TransactionLevel::RepeatableRead;
+	tp.lock_resolution = LockResolution::Wait;
+	tp.autostart = false;
+	tp.auto_commit_on_destroy = true;
+	tp.lock_time_out = 333; // in seeconds
+
+	auto transaction4 = conn->create_transaction(tp);
+
+	transaction4->start();
+```
+
+### Type conversion
 Library automatically converts type of parameters and result fields
 ```cpp
 	// type conversion for parameter values
