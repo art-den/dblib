@@ -1,6 +1,6 @@
 # dblib
 Simple C++ library to get access to different DBMSs. SQLite, Firebird and PostgreSQL are supported. 
-Author compiles library by Visual Studio and tests it only usder Microsoft Widnows.
+Author compiles library by Visual Studio and tests it only under Microsoft Widnows.
 
 ## How to use
 Installation is not required. Add sources of library to you project. Support of C++17 for compiler is required
