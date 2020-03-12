@@ -230,3 +230,5 @@ Library automatically converts type of parameters and result fields
 		(int32_t)st->get_last_row_id()
 	);
 ```
+## Speed up the library
+dblib uses `std::regex` to preprocess SQL text before execute. `std::regex` is really slow. `boost::regex` is much faster. To use `boost::regex` instead of `std::regex`, define `DBLIB_BOOST_REGEX`
