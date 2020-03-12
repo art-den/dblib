@@ -244,7 +244,7 @@ int main()
 	fb_lib->load(L"C:\\Program Files\\Firebird\\Firebird_2_5\\WOW64\\fbclient.dll");
 
 	FbConnectParams params;
-	params.database = L"d:\databases\db1.fdb";
+	params.database = L"d:\\databases\\db1.fdb";
 	params.user = "SYSDBA";
 	params.password = "masterkey";
 
@@ -254,6 +254,34 @@ int main()
 	// ...
 }
 
+```
+### Create new database (firebird example)
+```cpp
+int main()
+{
+	auto fb_lib = create_fb_lib();
+	fb_lib->load();
+
+	// define database params
+
+	FbConnectParams params;
+	params.database = L"d:\\databases\\db1.fdb";
+	params.user = "user1";
+	params.password = "blabla_imuser";
+
+	// define params for create database 
+
+	FbDbCreateParams create_params;
+	create_params.user = "SYSDBA";
+	create_params.password = "masterkey";
+	create_params.page_size = 16384;
+
+	// Create and connect database
+	auto conn = fb_lib->create_connection(params, &create_params);
+	conn->connect();
+
+	// ...
+}
 ```
 
 ## Speed up the library
