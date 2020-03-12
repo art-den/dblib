@@ -230,5 +230,31 @@ Library automatically converts type of parameters and result fields
 		(int32_t)st->get_last_row_id()
 	);
 ```
+
+### Define client dynamic library path (firebird example)
+```cpp
+#include "dblib/dblib_firebird.hpp"
+
+int main()
+{
+	auto fb_lib = create_fb_lib();
+
+	// specify dll path and load library
+
+	fb_lib->load(L"C:\\Program Files\\Firebird\\Firebird_2_5\\WOW64\\fbclient.dll");
+
+	FbConnectParams params;
+	params.database = L"d:\databases\db1.fdb";
+	params.user = "SYSDBA";
+	params.password = "masterkey";
+
+	auto conn = fb_lib->create_connection(params);
+	conn->connect();
+
+	// ...
+}
+
+```
+
 ## Speed up the library
 dblib uses `std::regex` to preprocess SQL text before execute. `std::regex` is really slow. `boost::regex` is much faster. To use `boost::regex` instead of `std::regex`, define `DBLIB_BOOST_REGEX`
