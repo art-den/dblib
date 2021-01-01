@@ -381,7 +381,7 @@ static void check_result_status(
 	auto conn_status = api.PQstatus(conn);
 
 	const char *sql_code_str = api.PQresultErrorField(res, PG_DIAG_SQLSTATE);
-	std::string sql_code = sql_code_str ? sql_code_str : std::string{};
+	std::string_view sql_code = sql_code_str ? sql_code_str : std::string_view{};
 
 	if (conn_status == CONNECTION_BAD)
 		error_type = ErrorType::LostConnection;

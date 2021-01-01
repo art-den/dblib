@@ -556,9 +556,9 @@ BOOST_AUTO_TEST_CASE(transaction_and_statament_test)
 	});
 }
 
-BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
+static void do_transaction_deadlock_test(const char *sql1, const char *sql2, bool have_to_be_empty_after)
 {
-	for_all_connections_do(2, [](const Connections &connections)
+	for_all_connections_do(2, [=](const Connections &connections)
 	{
 		auto &conn1 = *connections[0];
 		auto &conn2 = *connections[1];
@@ -582,7 +582,7 @@ BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
 		try
 		{
 			auto st1 = tr1->create_statement();
-			st1->execute("update tr_deadlock_test set int_fld2 = 10 where int_fld1 = 1");
+			st1->execute(sql1);
 			BOOST_CHECK(true);
 		}
 		catch (const Exception&)
@@ -593,32 +593,81 @@ BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
 		try
 		{
 			auto st2 = tr2->create_statement();
-			st2->execute("update tr_deadlock_test set int_fld2 = 20 where int_fld1 = 1");
+			st2->execute(sql2);
 			BOOST_CHECK(false);
 		}
 		catch (const LockException&)
 		{
 			BOOST_CHECK(true);
 		}
+		catch (const Exception&)
+		{
+			BOOST_CHECK(false); // wrong exception type. Only LockException is valid this case
+		}
 
 		tr1->commit();
-
 		tr2->rollback();
 
 		auto tr3 = conn2.create_transaction();
 		auto st3 = tr3->create_statement();
-		st3->execute("select int_fld2 from tr_deadlock_test where int_fld1 = 1");
-		BOOST_CHECK(st3->fetch());
-		BOOST_CHECK(st3->get_int32(1) == 10);
+		if (have_to_be_empty_after)
+		{
+			st3->execute("select count(*) from tr_deadlock_test");
+			BOOST_CHECK(st3->fetch());
+			BOOST_CHECK(st3->get_int32(1) == 0);
+		}
+		else
+		{
+			st3->execute("select int_fld2 from tr_deadlock_test where int_fld1 = 1");
+			BOOST_CHECK(st3->fetch());
+			BOOST_CHECK(st3->get_int32(1) == 10);
+		}
 		tr3->commit();
 
 		tr2->start();
 		auto st2 = tr2->create_statement();
-		st2->execute("select int_fld2 from tr_deadlock_test where int_fld1 = 1");
-		BOOST_CHECK(st2->fetch());
-		BOOST_CHECK(st2->get_int32(1) == 10);
+		if (have_to_be_empty_after)
+		{
+			st2->execute("select count(*) from tr_deadlock_test");
+			BOOST_CHECK(st2->fetch());
+			BOOST_CHECK(st2->get_int32(1) == 0);
+		}
+		else
+		{
+			st2->execute("select int_fld2 from tr_deadlock_test where int_fld1 = 1");
+			BOOST_CHECK(st2->fetch());
+			BOOST_CHECK(st2->get_int32(1) == 10);
+		}
 	});
 }
+
+BOOST_AUTO_TEST_CASE(transaction_deadlock_test)
+{
+	do_transaction_deadlock_test(
+		"update tr_deadlock_test set int_fld2 = 10 where int_fld1 = 1",
+		"update tr_deadlock_test set int_fld2 = 20 where int_fld1 = 1",
+		false
+	);
+
+	do_transaction_deadlock_test(
+		"delete from tr_deadlock_test",
+		"update tr_deadlock_test set int_fld2 = 20 where int_fld1 = 1",
+		true
+	);
+
+	do_transaction_deadlock_test(
+		"update tr_deadlock_test set int_fld2 = 10 where int_fld1 = 1",
+		"delete from tr_deadlock_test",
+		false
+	);
+
+	do_transaction_deadlock_test(
+		"delete from tr_deadlock_test",
+		"delete from tr_deadlock_test",
+		true
+	);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 
