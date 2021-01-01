@@ -190,14 +190,6 @@ char const* FunctionalityNotSupported::what() const
 }
 
 
-// ConnectionLostException
-
-char const* ConnectionLostException::what() const
-{
-	return "Conection to database server has lost";
-}
-
-
 // ColumnValueIsNullException
 
 ColumnValueIsNullException::ColumnValueIsNullException(std::string_view column_name)

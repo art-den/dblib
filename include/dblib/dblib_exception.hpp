@@ -151,10 +151,10 @@ public:
 	char const* what() const override;
 };
 
-class DBLIB_API ConnectionLostException : public Exception
+class DBLIB_API ConnectionLostException : public ExceptionEx
 {
 public:
-	char const* what() const override;
+	using ExceptionEx::ExceptionEx;
 };
 
 class DBLIB_API ColumnValueIsNullException : public Exception

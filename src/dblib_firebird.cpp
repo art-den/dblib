@@ -721,11 +721,19 @@ static bool is_status_vector_ok(const ISC_STATUS *status_vect)
 	return ((status_vect[0] != 1) || (status_vect[1] <= 0));
 }
 
+bool find_error_code(const ISC_STATUS* status_vect, ISC_STATUS error_code)
+{
+	for (size_t i = 0; (i < StatusLen) && (status_vect[i] != 0); i += 2)
+		if (status_vect[i] == 1)
+			if (status_vect[i + 1] == error_code) return true;
+
+	return false;
+}
+
 static void check_status_vector(
 	const FbApi       &api,
 	const char        *fun_name,
 	const ISC_STATUS  *status_vect,
-	ErrorType         error_type,
 	std::string_view  sql)
 {
 	if (is_status_vector_ok(status_vect)) return;
@@ -750,19 +758,27 @@ static void check_status_vector(
 		if (!status_vector_to_call) break;
 	}
 
-	// deadlock?
-	bool update_conflict = false;
-	for (size_t i = 0; (i < StatusLen) && (status_vect[i] != 0); i += 2)
-	{
-		if (status_vect[i] == 1)
-		{
-			if (status_vect[i+1] == isc_update_conflict)
-				update_conflict = true;
-		}
-	}
+	// can't connect?
+	bool cant_connect = find_error_code(status_vect, isc_net_connect_err);
 
-	if (update_conflict) 
-		error_type = ErrorType::Lock;
+	// lost connection?
+	bool lost_conn =
+		find_error_code(status_vect, isc_net_read_err) ||
+		find_error_code(status_vect, isc_net_write_err);
+
+	// deadlock?
+	bool update_conflict =
+		find_error_code(status_vect, isc_deadlock) ||
+		find_error_code(status_vect, isc_update_conflict) ||
+		find_error_code(status_vect, isc_lock_conflict);
+
+	// TODO: exception for transactions
+
+	ErrorType error_type =
+		cant_connect    ? ErrorType::Connection :
+		lost_conn       ? ErrorType::LostConnection :
+		update_conflict ? ErrorType::Lock : 
+		ErrorType::Normal;
 
 	// throw
 	throw_exception(
@@ -898,7 +914,7 @@ void FbServicesImpl::attach(const FbServicesConnectParams &params)
 	ISC_STATUS status[StatusLen] = {};
 
 	lib_->api.isc_service_attach(status, 0, (char*)name.c_str(), &handle_, spb.size(), spb.data());
-	check_status_vector(lib_->api, "isc_service_attach", status, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_service_attach", status, {});
 }
 
 void FbServicesImpl::detach()
@@ -979,14 +995,14 @@ void FbServicesImpl::detach_internal(bool check_error)
 	ISC_STATUS status[StatusLen] = {};
 	lib_->api.isc_service_detach(status, &handle_);
 	if (check_error)
-		check_status_vector(lib_->api, "isc_service_detach", status, ErrorType::Normal, {});
+		check_status_vector(lib_->api, "isc_service_detach", status, {});
 }
 
 void FbServicesImpl::start_service_and_check_status(const BinaryBuffer &data)
 {
 	ISC_STATUS status[StatusLen] = {};
 	lib_->api.isc_service_start(status, &handle_, nullptr, data.size(), data.data());
-	check_status_vector(lib_->api, "isc_service_start", status, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_service_start", status, {});
 }
 
 
@@ -1054,29 +1070,16 @@ void FbConnectionImpl::connect()
 
 	ISC_STATUS status_vect[StatusLen] = {};
 
-	auto attach_database = [&] (bool check_status)
-	{
-		assert(server_and_path.size() <= SHRT_MAX);
-		lib->api.isc_attach_database(
-			status_vect,
-			(short)server_and_path.size(),
-			server_and_path.c_str(),
-			&db_handle_,
-			dpb.size(),
-			dpb.data()
-		);
+	assert(server_and_path.size() <= SHRT_MAX);
 
-		if (check_status)
-			check_status_vector(
-				lib->api, 
-				"isc_attach_database", 
-				status_vect, 
-				ErrorType::Connection, 
-				{}
-			);
-	};
-
-	attach_database(false);
+	lib->api.isc_attach_database(
+		status_vect,
+		(short)server_and_path.size(),
+		server_and_path.c_str(),
+		&db_handle_,
+		dpb.size(),
+		dpb.data()
+	);
 
 	// if it's error and create params are defined
 	if (create_params_defined_ && !is_status_vector_ok(status_vect) && (status_vect[1] == isc_io_error))
@@ -1086,8 +1089,17 @@ void FbConnectionImpl::connect()
 		disconnect();
 
 		// connect to new created database
-		attach_database(true);
+		lib->api.isc_attach_database(
+			status_vect,
+			(short)server_and_path.size(),
+			server_and_path.c_str(),
+			&db_handle_,
+			dpb.size(),
+			dpb.data()
+		);
 	}
+
+	check_status_vector(lib->api, "isc_attach_database", status_vect, {});
 	
 
 	// get info about database
@@ -1104,7 +1116,7 @@ void FbConnectionImpl::connect()
 		(short)res_buffer.size(),
 		res_buffer.data()
 	);
-	check_status_vector(lib->api, "isc_database_info", status_vect, ErrorType::Connection, {});
+	check_status_vector(lib->api, "isc_database_info", status_vect, {});
 
 	dialect_ = res_buffer.get_int(lib->api, isc_info_db_SQL_dialect);
 	assert(dialect_ != -1);
@@ -1121,7 +1133,7 @@ void FbConnectionImpl::internal_disconnect(bool throw_exception)
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib->api.isc_detach_database(status_vect, &db_handle_);
 	if (throw_exception)
-		check_status_vector(lib->api, "isc_detach_database", status_vect, ErrorType::Connection, {});
+		check_status_vector(lib->api, "isc_detach_database", status_vect, {});
 	db_handle_ = 0;
 }
 
@@ -1170,7 +1182,7 @@ void FbConnectionImpl::try_to_create_database()
 		0
 	);
 
-	check_status_vector(lib->api, "isc_create_database", status_vect, ErrorType::Connection, {});
+	check_status_vector(lib->api, "isc_create_database", status_vect, {});
 }
 
 TransactionPtr FbConnectionImpl::create_transaction(const TransactionParams& transaction_params)
@@ -1338,14 +1350,14 @@ void FbTransactionImpl::internal_start()
 		tpb_.size(),
 		tpb_.data()
 	);
-	check_status_vector(lib_->api, "isc_start_transaction", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_start_transaction", status_vect, {});
 }
 
 void FbTransactionImpl::internal_commit()
 {
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_commit_transaction(status_vect, &tran_);
-	check_status_vector(lib_->api, "isc_commit_transaction", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_commit_transaction", status_vect, {});
 	tran_ = 0;
 }
 
@@ -1354,7 +1366,7 @@ void FbTransactionImpl::internal_rollback()
 	check_started();
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_rollback_transaction(status_vect, &tran_);
-	check_status_vector(lib_->api, "isc_rollback_transaction", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_rollback_transaction", status_vect, {});
 	tran_ = 0;
 }
 
@@ -1422,12 +1434,12 @@ void SqlDA::check_size(const FbApi& api, bool in, isc_stmt_handle stmt)
 		if (in)
 		{
 			api.isc_dsql_describe_bind(status_vect, &stmt, DaVersion, data_);
-			check_status_vector(api, "isc_dsql_describe_bind", status_vect, ErrorType::Normal, {});
+			check_status_vector(api, "isc_dsql_describe_bind", status_vect, {});
 		}
 		else
 		{
 			api.isc_dsql_describe(status_vect, &stmt, DaVersion, data_);
-			check_status_vector(api, "isc_dsql_describe", status_vect, ErrorType::Normal, {});
+			check_status_vector(api, "isc_dsql_describe", status_vect, {});
 		}
 	}
 }
@@ -1442,7 +1454,7 @@ void SqlDA::close_blob_handles(const FbApi& api, bool throw_exception)
 		api.isc_close_blob(status_vect, &item.blob_handle);
 		item.blob_handle = 0;
 		if (throw_exception)
-			check_status_vector(api, "isc_close_blob", status_vect, ErrorType::Normal, {});
+			check_status_vector(api, "isc_close_blob", status_vect, {});
 	}
 }
 
@@ -1614,19 +1626,19 @@ void InSqlDA::blob_param(
 		nullptr
 	);
 
-	check_status_vector(api, "isc_create_blob2", status_vect, ErrorType::Normal, {});
+	check_status_vector(api, "isc_create_blob2", status_vect, {});
 
 	while (blob_size != 0)
 	{
 		uint16_t len = (blob_size > SHRT_MAX) ? SHRT_MAX : (short)blob_size;
 		api.isc_put_segment(status_vect, &bl_handle, len, blob_data);
-		check_status_vector(api, "isc_put_segment", status_vect, ErrorType::Normal, {});
+		check_status_vector(api, "isc_put_segment", status_vect, {});
 		blob_data += len;
 		blob_size -= len;
 	}
 
 	api.isc_close_blob(status_vect, &bl_handle);
-	check_status_vector(api, "isc_close_blob", status_vect, ErrorType::Normal, {});
+	check_status_vector(api, "isc_close_blob", status_vect, {});
 }
 
 
@@ -1735,7 +1747,7 @@ void OutSqlDA::prepare_blob_handle(
 		nullptr
 	);
 
-	check_status_vector(api, "isc_open_blob2", status_vect, ErrorType::Normal, {});
+	check_status_vector(api, "isc_open_blob2", status_vect, {});
 }
 
 
@@ -1763,7 +1775,7 @@ size_t OutSqlDA::get_blob_size(
 		res_buffer.data()
 	);
 
-	check_status_vector(api, "isc_blob_info", status_vect, ErrorType::Normal, {});
+	check_status_vector(api, "isc_blob_info", status_vect, {});
 
 	return res_buffer.get_int(api, isc_info_blob_total_length);
 }
@@ -1800,7 +1812,7 @@ void OutSqlDA::read_blob(
 			buffer.data()
 		);
 
-		check_status_vector(api, "isc_get_segment", status_vect, ErrorType::Normal, {});
+		check_status_vector(api, "isc_get_segment", status_vect,{});
 
 		std::copy(buffer.begin(), buffer.begin() + bytes_read, dst_from);
 
@@ -1863,7 +1875,7 @@ void FbStatementImpl::close(bool throw_exception)
 	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_drop);
 
 	if (throw_exception)
-		check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, ErrorType::Normal, {});
+		check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, {});
 
 	out_sqlda_.clear_null_flags();
 	out_sqlda_.clear_buffers();
@@ -1883,7 +1895,7 @@ void FbStatementImpl::close_cursor()
 
 	ISC_STATUS status_vect[StatusLen] = {};
 	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_close);
-	check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, {});
 }
 
 void FbStatementImpl::prepare_impl(std::string_view sql)
@@ -1898,7 +1910,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		&conn_->get_handle(),
 		&stmt_
 	);
-	check_status_vector(lib_->api, "isc_dsql_allocate_statement", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_allocate_statement", status_vect, {});
 
 	assert(sql.size() <= USHRT_MAX);
 	lib_->api.isc_dsql_prepare(
@@ -1910,7 +1922,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		conn_->get_dialect(),
 		out_sqlda_.data()
 	);
-	check_status_vector(lib_->api, "isc_dsql_prepare", status_vect, ErrorType::Normal, sql);
+	check_status_vector(lib_->api, "isc_dsql_prepare", status_vect, sql);
 
 	type_ = get_type_internal();
 
@@ -1920,7 +1932,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 		DaVersion,
 		in_sqlda_.data()
 	);
-	check_status_vector(lib_->api, "isc_dsql_describe_bind", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_describe_bind", status_vect, {});
 
 	in_sqlda_.check_size(lib_->api, true, stmt_);
 	in_sqlda_.alloc_fields();
@@ -1949,7 +1961,7 @@ StatementType FbStatementImpl::get_type_internal()
 		sizeof(res_buffer),
 		res_buffer
 	);
-	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, {});
 
 	int stmt_type_len = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[1], 2);
 	int stmt_type = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[3], stmt_type_len);
@@ -1991,7 +2003,7 @@ size_t FbStatementImpl::get_changes_count()
 		sizeof(res_buffer),
 		res_buffer
 	);
-	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, {});
 
 	if (res_buffer[0] != isc_info_sql_records) return 0;
 
@@ -2039,13 +2051,7 @@ void FbStatementImpl::internal_execute()
 		nullptr
 	);
 
-	check_status_vector(
-		lib_->api,
-		"isc_dsql_execute2",
-		status_vect,
-		ErrorType::Normal,
-		last_sql_
-	);
+	check_status_vector(lib_->api, "isc_dsql_execute2", status_vect, last_sql_);
 
 	if (type_ == StatementType::Select)
 		cursor_opened_ = true;
@@ -2111,7 +2117,7 @@ bool FbStatementImpl::fetch()
 		throw WrongSeqException("Can't fetch data");
 	}
 
-	check_status_vector(lib_->api, "isc_dsql_fetch", status_vect, ErrorType::Normal, {});
+	check_status_vector(lib_->api, "isc_dsql_fetch", status_vect, {});
 	return false;
 }
 

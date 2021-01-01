@@ -364,6 +364,7 @@ using Statuses = std::initializer_list<ExecStatusType>;
 
 static void check_result_status(
 	const PgApi      &api,
+	const PGconn     *conn,
 	const PGresult   *res, 
 	const char       *fun_name, 
 	Statuses         ok_statuses,
@@ -372,23 +373,32 @@ static void check_result_status(
 {
 	if (res == nullptr) return;
 
-	auto status = api.PQresultStatus(res);
+	auto res_status = api.PQresultStatus(res);
 
-	auto it = std::find(ok_statuses.begin(), ok_statuses.end(), status);
+	auto it = std::find(ok_statuses.begin(), ok_statuses.end(), res_status);
 	if (it != ok_statuses.end()) return;
 
-	std::string sql_code = api.PQresultErrorField(res, PG_DIAG_SQLSTATE);
+	auto conn_status = api.PQstatus(conn);
 
-	if ((sql_code == "55P03") || (sql_code == "40P01") || (sql_code == "40001"))
+	const char *sql_code_str = api.PQresultErrorField(res, PG_DIAG_SQLSTATE);
+	std::string sql_code = sql_code_str ? sql_code_str : std::string{};
+
+	if (conn_status == CONNECTION_BAD)
+		error_type = ErrorType::LostConnection;
+
+	else if ((sql_code == "55P03") || (sql_code == "40P01") || (sql_code == "40001"))
 		error_type = ErrorType::Lock;
+
+	const char* res_status_str = api.PQresStatus(res_status);
+	const char* res_verb_error_str = api.PQresultVerboseErrorMessage(res, PQERRORS_VERBOSE, PQSHOW_CONTEXT_ALWAYS);
 
 	throw_exception(
 		fun_name,
-		(int)status,
+		(int)res_status,
 		-1,
-		api.PQresStatus(status),
+		res_status_str ? res_status_str : std::string_view{},
 		sql_code,
-		api.PQresultVerboseErrorMessage(res, PQERRORS_VERBOSE, PQSHOW_CONTEXT_ALWAYS),
+		res_verb_error_str ? res_verb_error_str : std::string_view{},
 		sql,
 		error_type
 	);
@@ -408,13 +418,25 @@ static void check_ret_code(
 	auto it = std::find(ok_codes.begin(), ok_codes.end(), ret_code);
 	if (it != ok_codes.end()) return;
 
+	switch (api.PQstatus(conn))
+	{
+	case CONNECTION_BAD:
+		error_type = ErrorType::Connection;
+		break;
+
+	default:
+		break;
+	}
+
+	const char* err_msg = api.PQerrorMessage(conn);
+
 	throw_exception(
 		fun_name,
 		(int)ret_code,
 		-1,
 		{},
 		{},
-		api.PQerrorMessage(conn),
+		err_msg ? err_msg : std::string_view{},
 		sql,
 		error_type
 	);
@@ -681,15 +703,13 @@ void PgConnectionImpl::connect()
 
 	conn_ = lib_->api.PQconnectdbParams(keywords.data(), values.data(), 0);
 
-	auto status = lib_->api.PQstatus(conn_);
-
 	try
 	{
 		check_ret_code(
 			lib_->api,
 			conn_,
-			status,
-			"PQconnectdbParams",
+			lib_->api.PQstatus(conn_),
+			"PQstatus after PQconnectdbParams",
 			{ CONNECTION_OK },
 			{},
 			ErrorType::Connection
@@ -749,7 +769,7 @@ void PgConnectionImpl::direct_execute(std::string_view sql)
 	auto exec_impl = [this](const char* sql)
 	{
 		auto result = lib_->api.PQexec(conn_, sql);
-		check_result_status(lib_->api, result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Normal);
+		check_result_status(lib_->api, conn_, result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Normal);
 	};
 
 	exec_impl(direct_execute_buffer_.c_str());
@@ -891,7 +911,7 @@ void PgTransactionImpl::exec(const char* sql)
 {
 	conn_->skip_previous_data();
 	auto result = lib_->api.PQexec(conn_->get_connection(), sql);
-	check_result_status(lib_->api, result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Transaction);
+	check_result_status(lib_->api, conn_->get_connection(), result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Transaction);
 }
 
 PgStatementPtr PgTransactionImpl::create_pg_statement()
@@ -952,6 +972,7 @@ void PgStatementImpl::prepare(
 
 	check_result_status(
 		lib_->api,
+		conn_->get_connection(),
 		tmp_result.get(),
 		"PQprepare",
 		{ PGRES_COMMAND_OK },
@@ -966,6 +987,7 @@ void PgStatementImpl::prepare(
 
 	check_result_status(
 		lib_->api,
+		conn_->get_connection(),
 		result_.get(),
 		"PQdescribePrepared",
 		{ PGRES_COMMAND_OK },
@@ -1064,6 +1086,7 @@ void PgStatementImpl::fetch_and_check_if_result_is_end_of_tuples()
 
 	check_result_status(
 		lib_->api,
+		conn_->get_connection(),
 		result_.get(),
 		"PQgetResult",
 		{ PGRES_SINGLE_TUPLE, PGRES_COMMAND_OK, PGRES_TUPLES_OK },

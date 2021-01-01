@@ -113,7 +113,8 @@ enum class ErrorType
 	Normal,
 	Transaction,
 	Lock,
-	Connection
+	Connection,
+	LostConnection
 };
 
 void throw_exception(
