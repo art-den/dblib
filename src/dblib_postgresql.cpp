@@ -23,6 +23,8 @@ THE SOFTWARE.
 */
 
 #include <vector>
+#include <array>
+#include <assert.h>
 #include "dblib/dblib_postgresql.hpp"
 #include "dblib/dblib_exception.hpp"
 #include "dblib/dblib_cvt_utils.hpp"
@@ -45,6 +47,228 @@ constexpr Oid TIMESTAMPOID = 1114;
 constexpr Oid BYTEAOID = 17;
 constexpr Oid NAMEOID = 19;
 constexpr Oid TEXTOID = 25;
+
+
+/* class PgBuffer */
+
+void PgBuffer::clear()
+{
+	data_.clear();
+	header_added_ = false;
+	footer_added_ = false;
+}
+
+void PgBuffer::begin_tuple()
+{
+	add_header();
+	start_tuple_pos_ = data_.size();
+	data_.push_back(0);
+	data_.push_back(0);
+	col_count_ = 0;
+}
+
+void PgBuffer::add_header()
+{
+	if (header_added_) return;
+
+	// Signature
+	const char header_text[] = { 'P','G','C','O','P','Y','\n','\377','\r','\n','\0' };
+	data_.insert(data_.end(), std::begin(header_text), std::end(header_text));
+
+	// Flags field
+	data_.push_back(0); data_.push_back(0); data_.push_back(0); data_.push_back(0);
+
+	// Header extension area length
+	data_.push_back(0); data_.push_back(0); data_.push_back(0); data_.push_back(0);
+
+	header_added_ = true;
+}
+
+template <typename T>
+void PgBuffer::write_opt(const std::optional<T>& value)
+{
+	static_assert(BeBuffSize >= sizeof(T));
+
+	if (value)
+	{
+		write_len(sizeof(T));
+		write_value(*value);
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+template <typename T> 
+void PgBuffer::write_value(T value)
+{
+	write_value_into_bytes_be<T>(value, be_buffer_);
+	data_.insert(data_.end(), be_buffer_, be_buffer_ + sizeof(T));
+}
+
+void PgBuffer::write_null()
+{
+	write_value<int32_t>(-1);
+}
+
+void PgBuffer::write_len(uint32_t len)
+{
+	write_value<int32_t>(len);
+}
+
+void PgBuffer::write_int32_opt(Int32Opt value)
+{
+	assert(start_tuple_pos_);
+	write_opt(value);
+}
+
+void PgBuffer::write_int64_opt(Int64Opt value)
+{
+	assert(start_tuple_pos_);
+	write_opt(value);
+}
+
+void PgBuffer::write_float_opt(FloatOpt value)
+{
+	assert(start_tuple_pos_);
+	write_opt(value);
+}
+
+void PgBuffer::write_double_opt(DoubleOpt value)
+{
+	assert(start_tuple_pos_);
+	write_opt(value);
+}
+
+void PgBuffer::write_u8str_opt(const StringOpt& text)
+{
+	assert(start_tuple_pos_);
+
+	if (text)
+	{
+		write_len((uint32_t)text->size());
+		data_.insert(data_.end(), text->begin(), text->end());
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+void PgBuffer::write_wstr_opt(const WStringOpt& text)
+{
+	assert(start_tuple_pos_);
+
+	if (text)
+	{
+		utf16_to_utf8(*text, utf8_buffer_);
+		write_len((uint32_t)utf8_buffer_.size());
+		data_.insert(data_.end(), utf8_buffer_.begin(), utf8_buffer_.end());
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+void PgBuffer::write_date_opt(const DateOpt& date)
+{
+	assert(start_tuple_pos_);
+
+	if (date)
+	{
+		auto pg_data = dblib_date_to_pg_date(*date);
+		write_len(sizeof(pg_data));
+		write_value(pg_data);
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+void PgBuffer::write_time_opt(const TimeOpt& time)
+{
+	assert(start_tuple_pos_);
+
+	if (time)
+	{
+		auto pg_time = dblib_time_to_pg_time(*time);
+		write_len(sizeof(pg_time));
+		write_value(pg_time);
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+void PgBuffer::write_timestamp_opt(const TimeStampOpt& ts)
+{
+	assert(start_tuple_pos_);
+
+	if (ts)
+	{
+		auto pg_ts = dblib_timestamp_to_pg_timestamp(*ts);
+		write_len(sizeof(pg_ts));
+		write_value(pg_ts);
+	}
+	else
+	{
+		write_null();
+	}
+
+	++col_count_;
+}
+
+void PgBuffer::end_tuple()
+{
+	assert(start_tuple_pos_);
+	assert(data_.size() > (start_tuple_pos_+1));
+
+	write_value_into_bytes_be(col_count_, be_buffer_);
+	data_[start_tuple_pos_] = be_buffer_[0];
+	data_[start_tuple_pos_+1] = be_buffer_[1];
+	start_tuple_pos_ = 0;
+}
+
+const char* PgBuffer::get_data() const
+{
+	assert(header_added_);
+	assert(start_tuple_pos_ == 0);
+
+	add_footer();
+	return data_.data();
+}
+
+uint32_t PgBuffer::get_size() const
+{
+	assert(header_added_);
+	assert(start_tuple_pos_ == 0);
+
+	add_footer();
+	return (uint32_t)data_.size();
+}
+
+void PgBuffer::add_footer() const
+{
+	if (footer_added_) return;
+	data_.push_back((char)0xFF);
+	data_.push_back((char)0xFF);
+	footer_added_ = true;
+}
+
 
 
 /* class PGresultHandler */
@@ -262,12 +486,15 @@ public:
 	std::string get_str_utf8_impl(size_t index) override;
 	std::wstring get_wstr_impl(size_t index) override;
 
+	// impl. PgStatement
+	void put_copy_data(const char* data, int data_len) override;
+	void put_buffer(const PgBuffer& buffer) override;
+
 private:
 	struct ParamValue
 	{
-		uint16_t i16 = 0;
-		uint32_t i32 = 0;
-		uint64_t i64 = 0;
+		static constexpr unsigned FixedBufferSize = 8;
+		std::array<char, FixedBufferSize> fixed_buffer;
 		std::vector<char> str;
 	};
 
@@ -631,6 +858,8 @@ void PgLibImpl::load(const std::wstring_view dyn_lib_file_name)
 	module.load_func(api.PQparamtype,                 "PQparamtype");
 	module.load_func(api.PQdescribePrepared,          "PQdescribePrepared");
 	module.load_func(api.PQclear,                     "PQclear");
+	module.load_func(api.PQputCopyData,               "PQputCopyData");
+	module.load_func(api.PQputCopyEnd,                "PQputCopyEnd");
 }
 
 bool PgLibImpl::is_loaded() const
@@ -997,17 +1226,19 @@ void PgStatementImpl::prepare(
 
 	int params_count = lib_->api.PQnparams(result_.get());
 
-	param_types_.clear();
+	param_types_.resize(params_count);
 	for (int i = 0; i < params_count; i++)
-		param_types_.push_back(lib_->api.PQparamtype(result_.get(), i));
+		param_types_[i] = lib_->api.PQparamtype(result_.get(), i);
 
-	param_data_.clear();
 	param_data_.resize(params_count);
-	param_values_.clear();
+	for (auto& item : param_data_) item.str.clear();
+
 	param_values_.resize(params_count);
-	param_lengths_.clear();
+	for (auto& item : param_values_) item = nullptr;
+
 	param_lengths_.resize(params_count);
-	param_formats_.clear();
+	for (auto& item : param_lengths_) item = 0;
+
 	param_formats_.resize(params_count, 1); // all binary format
 
 	state_ = StmtState::Prepared;
@@ -1089,13 +1320,13 @@ void PgStatementImpl::fetch_and_check_if_result_is_end_of_tuples()
 		conn_->get_connection(),
 		result_.get(),
 		"PQgetResult",
-		{ PGRES_SINGLE_TUPLE, PGRES_COMMAND_OK, PGRES_TUPLES_OK },
+		{ PGRES_SINGLE_TUPLE, PGRES_COMMAND_OK, PGRES_TUPLES_OK, PGRES_COPY_IN },
 		{},
 		ErrorType::Normal
 	);
 
 	auto status = lib_->api.PQresultStatus(result_.get());
-	if ((status == PGRES_TUPLES_OK) || (status == PGRES_COMMAND_OK))
+	if ((status == PGRES_TUPLES_OK) || (status == PGRES_COMMAND_OK) || (status == PGRES_COPY_IN))
 	{
 		contains_data_ = false;
 		return;
@@ -1205,30 +1436,18 @@ bool PgStatementImpl::fetch()
 template <typename T>
 void PgStatementImpl::set_value_parameter(size_t param_index, T value)
 {
-	if constexpr (sizeof(T) == 2)
+	if constexpr ((sizeof(T) == 2) || (sizeof(T) == 4) || (sizeof(T) == 8))
 	{
-		char* data = (char*)&param_data_.at(param_index - 1).i16;
+		static_assert(ParamValue::FixedBufferSize >= sizeof(T));
+		char* data = param_data_.at(param_index - 1).fixed_buffer.data();
 		write_value_into_bytes_be(value, data);
 		param_values_.at(param_index - 1) = data;
-	}
-	else if constexpr (sizeof(T) == 4)
-	{
-		char* data = (char*)&param_data_.at(param_index - 1).i32;
-		write_value_into_bytes_be(value, data);
-		param_values_.at(param_index - 1) = data;
-	}
-	else if constexpr (sizeof(T) == 8)
-	{
-		char* data = (char*)&param_data_.at(param_index - 1).i64;
-		write_value_into_bytes_be(value, data);
-		param_values_.at(param_index - 1) = data;
+		param_lengths_.at(param_index - 1) = sizeof(T);
 	}
 	else
 	{
 		static_assert(false, "Wrong type of parameter");
 	}
-
-	param_lengths_.at(param_index - 1) = sizeof(T);
 }
 
 template <typename T>
@@ -1672,6 +1891,51 @@ std::string PgStatementImpl::get_str_utf8_impl(size_t index)
 std::wstring PgStatementImpl::get_wstr_impl(size_t index)
 {
 	return get_value_impl<std::wstring>(index);
+}
+
+void PgStatementImpl::put_copy_data(const char* data, int data_len)
+{
+	auto put_data_res = lib_->api.PQputCopyData(conn_->get_connection(), data, data_len);
+
+	check_ret_code(
+		lib_->api,
+		conn_->get_connection(),
+		put_data_res,
+		"PQputCopyData",
+		{ 1 },
+		{},
+		ErrorType::Normal
+	);
+
+	auto put_end_res = lib_->api.PQputCopyEnd(conn_->get_connection(), nullptr);
+
+	check_ret_code(
+		lib_->api,
+		conn_->get_connection(),
+		put_end_res,
+		"PQputCopyEnd",
+		{ 1 },
+		{},
+		ErrorType::Normal
+	);
+
+	result_.set(lib_->api.PQgetResult(conn_->get_connection()));
+	if (!result_.get()) return;
+
+	check_result_status(
+		lib_->api,
+		conn_->get_connection(),
+		result_.get(),
+		"PQgetResult",
+		{ PGRES_COMMAND_OK },
+		{},
+		ErrorType::Normal
+	);
+}
+
+void PgStatementImpl::put_buffer(const PgBuffer& buffer)
+{
+	put_copy_data(buffer.get_data(), (int)buffer.get_size());
 }
 
 PgLibPtr create_pg_lib()

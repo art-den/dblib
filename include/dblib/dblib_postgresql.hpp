@@ -68,6 +68,9 @@ struct DBLIB_API PgApi
 	decltype(PQparamtype)                 *PQparamtype = nullptr;
 	decltype(PQdescribePrepared)          *PQdescribePrepared = nullptr;
 	decltype(PQclear)                     *PQclear = nullptr;
+	decltype(PQputCopyData)               *PQputCopyData = nullptr;
+	decltype(PQputCopyEnd)                *PQputCopyEnd = nullptr;
+	
 };
 
 struct DBLIB_API PgConnectParams
@@ -98,6 +101,50 @@ public:
 
 using PgLibPtr = std::shared_ptr<PgLib>;
 
+class DBLIB_API PgBuffer
+{
+public:
+	void clear();
+
+	void begin_tuple();
+
+	void write_int32_opt(Int32Opt value);
+	void write_int64_opt(Int64Opt value);
+	void write_float_opt(FloatOpt value);
+	void write_double_opt(DoubleOpt value);
+	void write_u8str_opt(const StringOpt& text);
+	void write_wstr_opt(const WStringOpt& text);
+	void write_date_opt(const DateOpt& date);
+	void write_time_opt(const TimeOpt& time);
+	void write_timestamp_opt(const TimeStampOpt& ts);
+
+	void end_tuple();
+
+	const char* get_data() const;
+	uint32_t get_size() const;
+
+private:
+	mutable std::vector<char> data_;
+	bool header_added_ = false;
+	mutable bool footer_added_ = false;
+	size_t start_tuple_pos_ = 0;
+	static constexpr unsigned BeBuffSize = 8;
+	char be_buffer_[BeBuffSize] = {};
+	uint16_t col_count_ = 0;
+	std::string utf8_buffer_;
+
+	void add_header();
+	void add_footer() const;
+
+	template <typename T>
+	void write_opt(const std::optional<T> &value);
+
+	template <typename T>
+	void write_value(T value);
+
+	void write_null();
+	void write_len(uint32_t len);
+};
 
 class DBLIB_API PgConnection : public Connection
 {
@@ -116,6 +163,8 @@ public:
 class DBLIB_API PgStatement : public Statement
 {
 public:
+	virtual void put_copy_data(const char *data, int data_len) = 0;
+	virtual void put_buffer(const PgBuffer &buffer) = 0;
 };
 
 // Date, time and timestamp conversions in or from internal PG format

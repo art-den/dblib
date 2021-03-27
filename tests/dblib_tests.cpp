@@ -133,7 +133,7 @@ static PgConnectionPtr get_postgresql_connection()
 
 	params.connect_timeout = 10;
 	params.host = "localhost";
-	params.db_name = "dblib_test";
+	params.db_name = "dblib_test_db";
 	params.user = "dblib_test";
 	params.password = "dblib_test";
 
@@ -1678,6 +1678,109 @@ BOOST_AUTO_TEST_CASE(pg_timestamp)
 	check({ 2021, 11, 21 }, { 22, 12, 33, 555, 777 });
 	check({ 2055, 12, 31 }, { 22, 12, 33, 555, 777 });
 }
+
+BOOST_AUTO_TEST_CASE(pg_copy)
+{
+	auto conn = get_postgresql_connection();
+	conn->connect();
+
+	exec_no_throw(*conn, { "drop table pg_copy_test" });
+	exec(*conn, { 
+		"create table pg_copy_test ("
+		"int_fld integer, "
+		"float_fld real, "
+		"double_fld double precision, "
+		"ts_fld timestamp, "
+		"tm_fld time, "
+		"dt_fld date, "
+		"str_fld varchar(200)"
+		")" 
+	});
+
+	auto tran = conn->create_transaction();
+	auto st = tran->create_statement();
+
+	st->execute(
+		"COPY pg_copy_test (int_fld, float_fld, str_fld, double_fld, ts_fld, tm_fld, dt_fld) "
+		"FROM STDIN (format binary)"
+	);
+
+	TimeStamp ts({ 1924, 12, 2 }, { 10, 22, 33, 555 });
+	Time time(10, 34, 33, 555);
+	Date date(1924, 12, 11);
+
+	PgBuffer buffer;
+
+	buffer.begin_tuple();
+	buffer.write_int32_opt(10);
+	buffer.write_float_opt(11.0f);
+	buffer.write_u8str_opt("12");
+	buffer.write_double_opt(42.0);
+	buffer.write_timestamp_opt(ts);
+	buffer.write_time_opt(time);
+	buffer.write_date_opt(date);
+	buffer.end_tuple();
+
+	buffer.begin_tuple();
+	buffer.write_int32_opt(100);
+	buffer.write_float_opt(111.0f);
+	buffer.write_u8str_opt("123");
+	buffer.write_double_opt(142.0);
+	buffer.write_timestamp_opt(ts);
+	buffer.write_time_opt(time);
+	buffer.write_date_opt(date);
+	buffer.end_tuple();
+
+	buffer.begin_tuple();
+	buffer.write_int32_opt({});
+	buffer.write_float_opt({});
+	buffer.write_u8str_opt({});
+	buffer.write_double_opt({});
+	buffer.write_timestamp_opt({});
+	buffer.write_time_opt({});
+	buffer.write_date_opt({});
+	buffer.end_tuple();
+
+	auto pg_st = std::dynamic_pointer_cast<PgStatement>(st);
+
+	pg_st->put_buffer(buffer);
+
+	st->execute(
+		"select int_fld, float_fld, str_fld, double_fld, ts_fld, tm_fld, dt_fld "
+		"from pg_copy_test"
+	);
+
+	BOOST_CHECK(st->fetch());
+	BOOST_CHECK(st->get_int32(1) == 10);
+	BOOST_CHECK(st->get_float(2) == 11.0f);
+	BOOST_CHECK(st->get_str_utf8(3) == "12");
+	BOOST_CHECK(st->get_double(4) == 42.0);
+	BOOST_CHECK(st->get_timestamp(5) == ts);
+	BOOST_CHECK(st->get_time(6) == time);
+	BOOST_CHECK(st->get_date(7) == date);
+
+	BOOST_CHECK(st->fetch());
+	BOOST_CHECK(st->get_int32(1) == 100);
+	BOOST_CHECK(st->get_float(2) == 111.0f);
+	BOOST_CHECK(st->get_str_utf8(3) == "123");
+	BOOST_CHECK(st->get_double(4) == 142.0);
+	BOOST_CHECK(st->get_timestamp(5) == ts);
+	BOOST_CHECK(st->get_time(6) == time);
+	BOOST_CHECK(st->get_date(7) == date);
+
+	BOOST_CHECK(st->fetch());
+	BOOST_CHECK(st->is_null(1));
+	BOOST_CHECK(st->is_null(2));
+	BOOST_CHECK(st->is_null(3));
+	BOOST_CHECK(st->is_null(4));
+	BOOST_CHECK(st->is_null(5));
+	BOOST_CHECK(st->is_null(6));
+	BOOST_CHECK(st->is_null(7));
+
+	BOOST_CHECK(!st->fetch());
+
+	tran->commit();
+};
 
 
 BOOST_AUTO_TEST_SUITE_END()
