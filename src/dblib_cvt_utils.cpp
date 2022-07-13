@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,19 @@ THE SOFTWARE.
 */
 
 #include <iterator>
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_conf.hpp"
 
 namespace dblib {
+
+DBLIB_API std::string file_name_to_utf8(FileName file_name)
+{
+#if defined(DBLIB_WINDOWS)
+	return utf16_to_utf8(file_name);
+#elif defined(DBLIB_LINUX)
+	return file_name;
+#endif
+}
 
 template <typename SrcIt>
 uint32_t get_utf8_char(SrcIt &it, SrcIt end, char err_char)
@@ -109,14 +119,19 @@ uint32_t get_utf16_char(SrcIt &it, SrcIt end, char err_char)
 template <typename SrcChar, typename SrcIt>
 uint32_t get_char(SrcIt &it, SrcIt end, char err_char)
 {
-	if constexpr (std::is_same_v<SrcChar, char>)
+	bool constexpr is_char = std::is_same_v<SrcChar, char>;
+	bool constexpr is_wchar_t = std::is_same_v<SrcChar, wchar_t>;
+
+	static_assert(
+		is_char||is_wchar_t,
+		"Wrong type in get_char"
+	);
+
+	if constexpr (is_char)
 		return get_utf8_char(it, end, err_char);
 
-	else if constexpr (std::is_same_v<SrcChar, wchar_t>)
+	else if constexpr (is_wchar_t)
 		return get_utf16_char(it, end, err_char);
-
-	else
-		static_assert(false && "Wrong type in get_char");
 }
 
 template <typename DstIt>
@@ -173,13 +188,20 @@ void put_char_utf16(DstIt &it, uint32_t value, char err_char)
 template <typename DstChar, typename DstIt>
 void put_char(DstIt &it, uint32_t value, char err_char)
 {
-	if constexpr (std::is_same_v<DstChar, wchar_t>)
+	bool constexpr is_wchar_t = std::is_same_v<DstChar, wchar_t>;
+	bool constexpr is_char = std::is_same_v<DstChar, char>;
+
+	static_assert(
+		is_wchar_t||is_char,
+		"Wrong type in put_char"
+	);
+
+	if constexpr (is_wchar_t)
 		put_char_utf16(it, value, err_char);
-	else if constexpr (std::is_same_v<DstChar, char>)
+	else if constexpr (is_char)
 		put_char_utf8(it, value, err_char);
-	else
-		static_assert(false && "Wrong type in put_char");
 }
+
 
 template <typename SrcChar, typename DstChar, typename SrcIt, typename DstIt>
 void utf_to_utf_impl(SrcIt src_begin, SrcIt src_end, DstIt dst_begin, char err_char)
@@ -257,17 +279,17 @@ int32_t date_to_julianday_integer(const Date& date)
 
 double timestamp_to_julianday(int year, int mon, int day, int hour, int min, int sec, int msec)
 {
-	return 
-		date_to_julianday(year, mon, day) 
-		+ time_to_days(hour, min, sec, msec) 
+	return
+		date_to_julianday(year, mon, day)
+		+ time_to_days(hour, min, sec, msec)
 		- 0.5;
 }
 
 double timestamp_to_julianday(const TimeStamp &ts)
 {
-	return 
-		date_to_julianday(ts.date) 
-		+ time_to_days(ts.time) 
+	return
+		date_to_julianday(ts.date)
+		+ time_to_days(ts.time)
 		- 0.5;
 }
 

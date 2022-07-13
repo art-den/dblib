@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -38,46 +38,46 @@ class SQLiteStatement; typedef std::shared_ptr<SQLiteStatement> SQLiteStatementP
 
 struct DBLIB_API SqliteApi
 {
-	decltype(sqlite3_close)                *sqlite3_close = nullptr;
-	decltype(sqlite3_exec)                 *sqlite3_exec = nullptr;
-	decltype(sqlite3_open_v2)              *sqlite3_open_v2 = nullptr;
-	decltype(sqlite3_errmsg)               *sqlite3_errmsg = nullptr;
-	decltype(sqlite3_errstr)               *sqlite3_errstr = nullptr;
-	decltype(sqlite3_prepare_v2)           *sqlite3_prepare_v2 = nullptr;
-	decltype(sqlite3_prepare16_v2)         *sqlite3_prepare16_v2 = nullptr;
-	decltype(sqlite3_bind_parameter_count) *sqlite3_bind_parameter_count = nullptr;
-	decltype(sqlite3_bind_blob)            *sqlite3_bind_blob = nullptr;
-	decltype(sqlite3_bind_double)          *sqlite3_bind_double = nullptr;
-	decltype(sqlite3_bind_int)             *sqlite3_bind_int = nullptr;
-	decltype(sqlite3_bind_int64)           *sqlite3_bind_int64 = nullptr;
-	decltype(sqlite3_bind_null)            *sqlite3_bind_null = nullptr;
-	decltype(sqlite3_bind_text)            *sqlite3_bind_text = nullptr;
-	decltype(sqlite3_column_count)         *sqlite3_column_count = nullptr;
-	decltype(sqlite3_column_name)          *sqlite3_column_name = nullptr;
-	decltype(sqlite3_step)                 *sqlite3_step = nullptr;
-	decltype(sqlite3_column_blob)          *sqlite3_column_blob = nullptr;
-	decltype(sqlite3_column_bytes)         *sqlite3_column_bytes = nullptr;
-	decltype(sqlite3_column_double)        *sqlite3_column_double = nullptr;
-	decltype(sqlite3_column_int)           *sqlite3_column_int = nullptr;
-	decltype(sqlite3_column_int64)         *sqlite3_column_int64 = nullptr;
-	decltype(sqlite3_column_text)          *sqlite3_column_text = nullptr;
-	decltype(sqlite3_column_text16)        *sqlite3_column_text16 = nullptr;
-	decltype(sqlite3_column_type)          *sqlite3_column_type = nullptr;
-	decltype(sqlite3_finalize)             *sqlite3_finalize = nullptr;
-	decltype(sqlite3_reset)                *sqlite3_reset = nullptr;
-	decltype(sqlite3_bind_parameter_index) *sqlite3_bind_parameter_index = nullptr;
-	decltype(sqlite3_changes)              *sqlite3_changes = nullptr;
-	decltype(sqlite3_last_insert_rowid)    *sqlite3_last_insert_rowid = nullptr;
-	decltype(sqlite3_create_function_v2)   *sqlite3_create_function_v2 = nullptr;
-	decltype(sqlite3_value_type)           *sqlite3_value_type = nullptr;
-	decltype(sqlite3_value_text16)         *sqlite3_value_text16 = nullptr;
-	decltype(sqlite3_value_text)           *sqlite3_value_text = nullptr;
-	decltype(sqlite3_user_data)            *sqlite3_user_data = nullptr;
-	decltype(sqlite3_result_text16)        *sqlite3_result_text16 = nullptr;
-	decltype(sqlite3_result_value)         *sqlite3_result_value = nullptr;
-	decltype(sqlite3_result_text)          *sqlite3_result_text = nullptr;
-	decltype(sqlite3_busy_timeout)         *sqlite3_busy_timeout = nullptr;
-	decltype(sqlite3_extended_errcode)     *sqlite3_extended_errcode = nullptr;
+	decltype(sqlite3_close)                *f_sqlite3_close = nullptr;
+	decltype(sqlite3_exec)                 *f_sqlite3_exec = nullptr;
+	decltype(sqlite3_open_v2)              *f_sqlite3_open_v2 = nullptr;
+	decltype(sqlite3_errmsg)               *f_sqlite3_errmsg = nullptr;
+	decltype(sqlite3_errstr)               *f_sqlite3_errstr = nullptr;
+	decltype(sqlite3_prepare_v2)           *f_sqlite3_prepare_v2 = nullptr;
+	decltype(sqlite3_prepare16_v2)         *f_sqlite3_prepare16_v2 = nullptr;
+	decltype(sqlite3_bind_parameter_count) *f_sqlite3_bind_parameter_count = nullptr;
+	decltype(sqlite3_bind_blob)            *f_sqlite3_bind_blob = nullptr;
+	decltype(sqlite3_bind_double)          *f_sqlite3_bind_double = nullptr;
+	decltype(sqlite3_bind_int)             *f_sqlite3_bind_int = nullptr;
+	decltype(sqlite3_bind_int64)           *f_sqlite3_bind_int64 = nullptr;
+	decltype(sqlite3_bind_null)            *f_sqlite3_bind_null = nullptr;
+	decltype(sqlite3_bind_text)            *f_sqlite3_bind_text = nullptr;
+	decltype(sqlite3_column_count)         *f_sqlite3_column_count = nullptr;
+	decltype(sqlite3_column_name)          *f_sqlite3_column_name = nullptr;
+	decltype(sqlite3_step)                 *f_sqlite3_step = nullptr;
+	decltype(sqlite3_column_blob)          *f_sqlite3_column_blob = nullptr;
+	decltype(sqlite3_column_bytes)         *f_sqlite3_column_bytes = nullptr;
+	decltype(sqlite3_column_double)        *f_sqlite3_column_double = nullptr;
+	decltype(sqlite3_column_int)           *f_sqlite3_column_int = nullptr;
+	decltype(sqlite3_column_int64)         *f_sqlite3_column_int64 = nullptr;
+	decltype(sqlite3_column_text)          *f_sqlite3_column_text = nullptr;
+	decltype(sqlite3_column_text16)        *f_sqlite3_column_text16 = nullptr;
+	decltype(sqlite3_column_type)          *f_sqlite3_column_type = nullptr;
+	decltype(sqlite3_finalize)             *f_sqlite3_finalize = nullptr;
+	decltype(sqlite3_reset)                *f_sqlite3_reset = nullptr;
+	decltype(sqlite3_bind_parameter_index) *f_sqlite3_bind_parameter_index = nullptr;
+	decltype(sqlite3_changes)              *f_sqlite3_changes = nullptr;
+	decltype(sqlite3_last_insert_rowid)    *f_sqlite3_last_insert_rowid = nullptr;
+	decltype(sqlite3_create_function_v2)   *f_sqlite3_create_function_v2 = nullptr;
+	decltype(sqlite3_value_type)           *f_sqlite3_value_type = nullptr;
+	decltype(sqlite3_value_text16)         *f_sqlite3_value_text16 = nullptr;
+	decltype(sqlite3_value_text)           *f_sqlite3_value_text = nullptr;
+	decltype(sqlite3_user_data)            *f_sqlite3_user_data = nullptr;
+	decltype(sqlite3_result_text16)        *f_sqlite3_result_text16 = nullptr;
+	decltype(sqlite3_result_value)         *f_sqlite3_result_value = nullptr;
+	decltype(sqlite3_result_text)          *f_sqlite3_result_text = nullptr;
+	decltype(sqlite3_busy_timeout)         *f_sqlite3_busy_timeout = nullptr;
+	decltype(sqlite3_extended_errcode)     *f_sqlite3_extended_errcode = nullptr;
 };
 
 enum class SqliteMultiThreadMode
@@ -145,7 +145,7 @@ class DBLIB_API SqliteLib
 public:
 	virtual ~SqliteLib();
 
-	virtual void load(const std::wstring_view &dyn_lib_file_name = {}) = 0;
+	virtual void load(const FileName &dyn_lib_file_name = {}) = 0;
 	virtual bool is_loaded() const = 0;
 
 	virtual const SqliteApi& get_api() = 0;

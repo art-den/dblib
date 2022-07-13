@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2017 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@ THE SOFTWARE.
 #endif
 
 #include "dblib_stmt_tools.hpp"
-#include "dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_exception.hpp"
 
 
 namespace dblib {
@@ -63,8 +63,8 @@ bool CaseInsensitiveComparer::operator() (std::string_view left, std::string_vie
 /* class SqlPreprocessor */
 
 void SqlPreprocessor::preprocess(
-	std::string_view             sql, 
-	bool                         use_native_parameters_syntax, 
+	std::string_view             sql,
+	bool                         use_native_parameters_syntax,
 	bool                         supports_indexed_params,
 	const SqlPreprocessorActions &actions)
 {
@@ -77,11 +77,11 @@ void SqlPreprocessor::preprocess(
 	int param_index = 1;
 
 	preprocess_internal(
-		sql, 
+		sql,
 		preprocessed_sql_,
-		actions, 
-		named_params_, 
-		indexed_params_, 
+		actions,
+		named_params_,
+		indexed_params_,
 		param_index,
 		use_native_parameters_syntax_,
 		supports_indexed_params
@@ -134,11 +134,11 @@ namespace regex_ns = std;
 #endif
 
 void SqlPreprocessor::preprocess_internal(
-	std::string_view             sql, 
+	std::string_view             sql,
 	std::string                  &preprocessed_sql,
-	const SqlPreprocessorActions &actions, 
-	NamedParams                  &named_params, 
-	IndexedParams                &indexed_params, 
+	const SqlPreprocessorActions &actions,
+	NamedParams                  &named_params,
+	IndexedParams                &indexed_params,
 	int                          &param_index,
 	bool                         use_native_parameters_syntax,
 	bool                         supports_indexed_params)
@@ -164,7 +164,7 @@ void SqlPreprocessor::preprocess_internal(
 
 	using SVI = std::string_view::const_iterator;
 	using Match = regex_ns::match_results<SVI>;
-	
+
 	Match m;
 	std::string parameter, seq_name, other_str, in_placeholder_parsed_text;
 	for (SVI begin = sql.begin();;)
@@ -275,7 +275,7 @@ void SqlPreprocessor::preprocess_internal(
 
 /* class ColumnsHelper */
 
-ColumnsHelper::ColumnsHelper(Statement& statement) : 
+ColumnsHelper::ColumnsHelper(Statement& statement) :
 	statement_(statement)
 {}
 
@@ -318,7 +318,7 @@ void throw_exception(
 	ErrorType        error_type)
 {
 	std::string error_text;
-	
+
 	error_text.append("Error during excecution of ");
 	error_text.append(fun_name);
 	error_text.append(".");

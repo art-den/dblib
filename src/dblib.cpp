@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 #include <assert.h>
 
-#include "dblib/dblib.hpp"
+#include "../include/dblib/dblib.hpp"
 #include "dblib_type_cvt.hpp"
 
 namespace dblib {
@@ -157,7 +157,7 @@ bool operator != (const Date& date1, const Date& date2)
 
 /* struct Time */
 
-Time::Time(int hour, int min, int sec, int msec, int usec) : 
+Time::Time(int hour, int min, int sec, int msec, int usec) :
 	hour(hour),
 	min(min),
 	sec(sec),
@@ -199,7 +199,7 @@ static bool ts_equal(const TimeStamp& ts1, const TimeStamp& ts2)
 		dates_equal(ts1.date, ts2.date) &&
 		times_equal(ts1.time, ts2.time);
 }
- 
+
 bool operator == (const TimeStamp& ts1, const TimeStamp& ts2)
 {
 	return ts_equal(ts1, ts2);
@@ -232,9 +232,9 @@ IndexOrName::IndexOrName(const std::string& name) :
 
 IndexOrNameType IndexOrName::get_type() const
 {
-	return 
-		std::holds_alternative<size_t>(value_) ? 
-		IndexOrNameType::Index : 
+	return
+		std::holds_alternative<size_t>(value_) ?
+		IndexOrNameType::Index :
 		IndexOrNameType::Name;
 }
 

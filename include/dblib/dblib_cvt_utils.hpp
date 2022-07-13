@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,8 @@ THE SOFTWARE.
 #include "dblib.hpp"
 
 namespace dblib {
+
+DBLIB_API std::string file_name_to_utf8(FileName file_name);
 
 // UTF8 -> UTF16
 

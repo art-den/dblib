@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,11 +24,13 @@ THE SOFTWARE.
 
 #include <assert.h>
 #include <stdint.h>
+#include <limits.h>
+#include <string.h>
 #include <vector>
 
-#include "dblib/dblib_exception.hpp"
-#include "dblib/dblib_firebird.hpp"
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_firebird.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
 
 #include "dblib_type_cvt.hpp"
 #include "dblib_dyn.hpp"
@@ -139,10 +141,10 @@ public:
 		for (const char *p = items_; *p != isc_info_end;)
 		{
 			char item = *p++;
-			int length = (int)api.isc_portable_integer((const ISC_UCHAR*)p, 2);
+			int length = (int)api.f_isc_portable_integer((const ISC_UCHAR*)p, 2);
 			p += 2;
 			if (item == type)
-				return (int)api.isc_portable_integer((const ISC_UCHAR*)p, length);
+				return (int)api.f_isc_portable_integer((const ISC_UCHAR*)p, length);
 			p += length;
 		}
 		return def_value;
@@ -172,7 +174,7 @@ public:
 	FbLibImpl();
 	~FbLibImpl() {}
 
-	void load(const std::wstring_view dyn_lib_file_name) override;
+	void load(const FileName &dyn_lib_file_name) override;
 	bool is_loaded() const override;
 
 	const FbApi& get_api() override;
@@ -287,7 +289,7 @@ private:
 
 	BinaryBuffer tpb_;
 	isc_tr_handle tran_ = 0;
-	
+
 	bool commit_on_destroy_ = true;
 };
 
@@ -392,8 +394,8 @@ private:
 
 /* class FbStatementImpl */
 
-class FbStatementImpl : 
-	public FbStatement, 
+class FbStatementImpl :
+	public FbStatement,
 	public IParameterSetterWithTypeCvt,
 	public IResultGetterWithTypeCvt
 {
@@ -739,11 +741,11 @@ static void check_status_vector(
 	if (is_status_vector_ok(status_vect)) return;
 
 	// error code
-	ISC_LONG sql_code = api.isc_sqlcode(status_vect);
+	ISC_LONG sql_code = api.f_isc_sqlcode(status_vect);
 
 	// error code explanation
 	char sql_msg[2048] = { 0 };
-	api.isc_sql_interprete((ISC_SHORT)sql_code, sql_msg, sizeof(sql_msg));
+	api.f_isc_sql_interprete((ISC_SHORT)sql_code, sql_msg, sizeof(sql_msg));
 
 	// error text
 	std::string whole_error_text;
@@ -751,7 +753,7 @@ static void check_status_vector(
 	for (;;)
 	{
 		char fb_msg[1024] = { 0 };
-		auto res = api.fb_interpret(fb_msg, sizeof(fb_msg), &status_vector_to_call);
+		auto res = api.f_fb_interpret(fb_msg, sizeof(fb_msg), &status_vector_to_call);
 		if (!res) break;
 		whole_error_text.append(fb_msg);
 		whole_error_text.append("\n");
@@ -777,7 +779,7 @@ static void check_status_vector(
 	ErrorType error_type =
 		cant_connect    ? ErrorType::Connection :
 		lost_conn       ? ErrorType::LostConnection :
-		update_conflict ? ErrorType::Lock : 
+		update_conflict ? ErrorType::Lock :
 		ErrorType::Normal;
 
 	// throw
@@ -802,51 +804,57 @@ FbLib::~FbLib()
 
 /* class FbLibImpl */
 
-FbLibImpl::FbLibImpl() : 
+FbLibImpl::FbLibImpl() :
 	data_(std::make_shared<FbLibData>())
 {}
 
-void FbLibImpl::load(const std::wstring_view dyn_lib_file_name)
+void FbLibImpl::load(const FileName &dyn_lib_file_name)
 {
 	if (data_->module.is_loaded()) return;
 
-	std::wstring file_name(dyn_lib_file_name.begin(), dyn_lib_file_name.end());
+	auto file_name = dyn_lib_file_name;
+
+#if defined(DBLIB_WINDOWS)
 	if (file_name.empty())
 		file_name = L"fbclient.dll";
+#elif defined(DBLIB_LINUX)
+	if (file_name.empty())
+		file_name = "fbclient.so";
+#endif
 
 	data_->module.load(file_name);
 
 	auto& module = data_->module;
 	auto& api = data_->api;
 
-	module.load_func(api.isc_attach_database,         "isc_attach_database");
-	module.load_func(api.isc_database_info,           "isc_database_info");
-	module.load_func(api.fb_interpret,                "fb_interpret");
-	module.load_func(api.isc_sql_interprete,          "isc_sql_interprete");
-	module.load_func(api.isc_detach_database,         "isc_detach_database");
-	module.load_func(api.isc_create_database,         "isc_create_database");
-	module.load_func(api.isc_blob_info,               "isc_blob_info");
-	module.load_func(api.isc_close_blob,              "isc_close_blob");
-	module.load_func(api.isc_commit_transaction,      "isc_commit_transaction");
-	module.load_func(api.isc_create_blob2,            "isc_create_blob2");
-	module.load_func(api.isc_dsql_allocate_statement, "isc_dsql_allocate_statement");
-	module.load_func(api.isc_dsql_describe,           "isc_dsql_describe");
-	module.load_func(api.isc_dsql_describe_bind,      "isc_dsql_describe_bind");
-	module.load_func(api.isc_dsql_execute2,           "isc_dsql_execute2");
-	module.load_func(api.isc_dsql_fetch,              "isc_dsql_fetch");
-	module.load_func(api.isc_dsql_free_statement,     "isc_dsql_free_statement");
-	module.load_func(api.isc_dsql_prepare,            "isc_dsql_prepare");
-	module.load_func(api.isc_dsql_sql_info,           "isc_dsql_sql_info");
-	module.load_func(api.isc_get_segment,             "isc_get_segment");
-	module.load_func(api.isc_open_blob2,              "isc_open_blob2");
-	module.load_func(api.isc_put_segment,             "isc_put_segment");
-	module.load_func(api.isc_rollback_transaction,    "isc_rollback_transaction");
-	module.load_func(api.isc_start_transaction,       "isc_start_transaction");
-	module.load_func(api.isc_sqlcode,                 "isc_sqlcode");
-	module.load_func(api.isc_portable_integer,        "isc_portable_integer");
-	module.load_func(api.isc_service_attach,          "isc_service_attach");
-	module.load_func(api.isc_service_detach,          "isc_service_detach");
-	module.load_func(api.isc_service_start,           "isc_service_start");
+	module.load_func(api.f_isc_attach_database,         "isc_attach_database");
+	module.load_func(api.f_isc_database_info,           "isc_database_info");
+	module.load_func(api.f_fb_interpret,                "fb_interpret");
+	module.load_func(api.f_isc_sql_interprete,          "isc_sql_interprete");
+	module.load_func(api.f_isc_detach_database,         "isc_detach_database");
+	module.load_func(api.f_isc_create_database,         "isc_create_database");
+	module.load_func(api.f_isc_blob_info,               "isc_blob_info");
+	module.load_func(api.f_isc_close_blob,              "isc_close_blob");
+	module.load_func(api.f_isc_commit_transaction,      "isc_commit_transaction");
+	module.load_func(api.f_isc_create_blob2,            "isc_create_blob2");
+	module.load_func(api.f_isc_dsql_allocate_statement, "isc_dsql_allocate_statement");
+	module.load_func(api.f_isc_dsql_describe,           "isc_dsql_describe");
+	module.load_func(api.f_isc_dsql_describe_bind,      "isc_dsql_describe_bind");
+	module.load_func(api.f_isc_dsql_execute2,           "isc_dsql_execute2");
+	module.load_func(api.f_isc_dsql_fetch,              "isc_dsql_fetch");
+	module.load_func(api.f_isc_dsql_free_statement,     "isc_dsql_free_statement");
+	module.load_func(api.f_isc_dsql_prepare,            "isc_dsql_prepare");
+	module.load_func(api.f_isc_dsql_sql_info,           "isc_dsql_sql_info");
+	module.load_func(api.f_isc_get_segment,             "isc_get_segment");
+	module.load_func(api.f_isc_open_blob2,              "isc_open_blob2");
+	module.load_func(api.f_isc_put_segment,             "isc_put_segment");
+	module.load_func(api.f_isc_rollback_transaction,    "isc_rollback_transaction");
+	module.load_func(api.f_isc_start_transaction,       "isc_start_transaction");
+	module.load_func(api.f_isc_sqlcode,                 "isc_sqlcode");
+	module.load_func(api.f_isc_portable_integer,        "isc_portable_integer");
+	module.load_func(api.f_isc_service_attach,          "isc_service_attach");
+	module.load_func(api.f_isc_service_detach,          "isc_service_detach");
+	module.load_func(api.f_isc_service_start,           "isc_service_start");
 }
 
 bool FbLibImpl::is_loaded() const
@@ -860,7 +868,7 @@ const FbApi& FbLibImpl::get_api()
 }
 
 FbConnectionPtr FbLibImpl::create_connection(
-	const FbConnectParams&  connect_params, 
+	const FbConnectParams&  connect_params,
 	const FbDbCreateParams* create_params)
 {
 	return std::make_shared<FbConnectionImpl>(data_, connect_params, create_params);
@@ -913,7 +921,7 @@ void FbServicesImpl::attach(const FbServicesConnectParams &params)
 
 	ISC_STATUS status[StatusLen] = {};
 
-	lib_->api.isc_service_attach(status, 0, (char*)name.c_str(), &handle_, spb.size(), spb.data());
+	lib_->api.f_isc_service_attach(status, 0, (char*)name.c_str(), &handle_, spb.size(), spb.data());
 	check_status_vector(lib_->api, "isc_service_attach", status, {});
 }
 
@@ -993,7 +1001,7 @@ void FbServicesImpl::check_is_attached()
 void FbServicesImpl::detach_internal(bool check_error)
 {
 	ISC_STATUS status[StatusLen] = {};
-	lib_->api.isc_service_detach(status, &handle_);
+	lib_->api.f_isc_service_detach(status, &handle_);
 	if (check_error)
 		check_status_vector(lib_->api, "isc_service_detach", status, {});
 }
@@ -1001,7 +1009,7 @@ void FbServicesImpl::detach_internal(bool check_error)
 void FbServicesImpl::start_service_and_check_status(const BinaryBuffer &data)
 {
 	ISC_STATUS status[StatusLen] = {};
-	lib_->api.isc_service_start(status, &handle_, nullptr, data.size(), data.data());
+	lib_->api.f_isc_service_start(status, &handle_, nullptr, data.size(), data.data());
 	check_status_vector(lib_->api, "isc_service_start", status, {});
 }
 
@@ -1058,11 +1066,11 @@ void FbConnectionImpl::connect()
 		server_and_path.append(connect_params_.host);
 		server_and_path.append(":");
 	}
-	server_and_path.append(utf16_to_utf8(connect_params_.database));
+	server_and_path.append(file_name_to_utf8(connect_params_.database));
 
 	check_not_greater(
-		server_and_path.size(), 
-		SHRT_MAX, 
+		server_and_path.size(),
+		SHRT_MAX,
 		"Length of host and database string too long (>SHRT_MAX)"
 	);
 
@@ -1072,7 +1080,7 @@ void FbConnectionImpl::connect()
 
 	assert(server_and_path.size() <= SHRT_MAX);
 
-	lib->api.isc_attach_database(
+	lib->api.f_isc_attach_database(
 		status_vect,
 		(short)server_and_path.size(),
 		server_and_path.c_str(),
@@ -1089,7 +1097,7 @@ void FbConnectionImpl::connect()
 		disconnect();
 
 		// connect to new created database
-		lib->api.isc_attach_database(
+		lib->api.f_isc_attach_database(
 			status_vect,
 			(short)server_and_path.size(),
 			server_and_path.c_str(),
@@ -1100,7 +1108,7 @@ void FbConnectionImpl::connect()
 	}
 
 	check_status_vector(lib->api, "isc_attach_database", status_vect, {});
-	
+
 
 	// get info about database
 
@@ -1108,7 +1116,7 @@ void FbConnectionImpl::connect()
 	char db_items[] = { isc_info_db_SQL_dialect, isc_info_end };
 
 	assert(res_buffer.size() <= SHRT_MAX);
-	lib->api.isc_database_info(
+	lib->api.f_isc_database_info(
 		status_vect,
 		&db_handle_,
 		sizeof(db_items),
@@ -1131,7 +1139,7 @@ void FbConnectionImpl::internal_disconnect(bool throw_exception)
 {
 	check_is_connected();
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib->api.isc_detach_database(status_vect, &db_handle_);
+	lib->api.f_isc_detach_database(status_vect, &db_handle_);
 	if (throw_exception)
 		check_status_vector(lib->api, "isc_detach_database", status_vect, {});
 	db_handle_ = 0;
@@ -1165,14 +1173,14 @@ void FbConnectionImpl::try_to_create_database()
 	if (create_params_.page_size > 0)
 		dpb.add_uint32_with_len(isc_dpb_page_size, create_params_.page_size);
 
-	std::string database_utf8 = utf16_to_utf8(connect_params_.database);
+	std::string database_utf8 = file_name_to_utf8(connect_params_.database);
 
 	ISC_STATUS status_vect[StatusLen] = {};
 	db_handle_ = 0;
 
 	check_not_greater(database_utf8.size(), SHRT_MAX, "Length of file is too long (>SHRT_MAX)");
 
-	lib->api.isc_create_database(
+	lib->api.f_isc_create_database(
 		status_vect,
 		(short)database_utf8.size(),
 		database_utf8.c_str(),
@@ -1234,11 +1242,11 @@ FbTransactionImpl::FbTransactionImpl(
 	const FbLibDataPtr&        lib,
 	const FbConnectionImplPtr& conn,
 	const TransactionParams&   transaction_params
-	
+
 ) :
 	lib_(lib),
 	conn_(conn)
-	
+
 {
 	tran_ = 0;
 
@@ -1287,12 +1295,12 @@ FbTransactionImpl::FbTransactionImpl(
 
 	switch (transaction_params.lock_resolution)
 	{
-	case LockResolution::Wait: 
+	case LockResolution::Wait:
 		{
 			auto lock_time_out = transaction_params.lock_time_out;
-			if (lock_time_out == -1) 
+			if (lock_time_out == -1)
 				lock_time_out = conn->get_default_transaction_lock_timeout();
-	
+
 			tpb_.add_uint8(isc_tpb_wait);
 			if (lock_time_out != -1)
 				tpb_.add_uint32_with_len(isc_tpb_lock_timeout, lock_time_out);
@@ -1342,7 +1350,7 @@ FbStatementPtr FbTransactionImpl::create_fb_statement()
 void FbTransactionImpl::internal_start()
 {
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_start_transaction(
+	lib_->api.f_isc_start_transaction(
 		status_vect,
 		&tran_,
 		1,
@@ -1356,7 +1364,7 @@ void FbTransactionImpl::internal_start()
 void FbTransactionImpl::internal_commit()
 {
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_commit_transaction(status_vect, &tran_);
+	lib_->api.f_isc_commit_transaction(status_vect, &tran_);
 	check_status_vector(lib_->api, "isc_commit_transaction", status_vect, {});
 	tran_ = 0;
 }
@@ -1365,7 +1373,7 @@ void FbTransactionImpl::internal_rollback()
 {
 	check_started();
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_rollback_transaction(status_vect, &tran_);
+	lib_->api.f_isc_rollback_transaction(status_vect, &tran_);
 	check_status_vector(lib_->api, "isc_rollback_transaction", status_vect, {});
 	tran_ = 0;
 }
@@ -1433,12 +1441,12 @@ void SqlDA::check_size(const FbApi& api, bool in, isc_stmt_handle stmt)
 
 		if (in)
 		{
-			api.isc_dsql_describe_bind(status_vect, &stmt, DaVersion, data_);
+			api.f_isc_dsql_describe_bind(status_vect, &stmt, DaVersion, data_);
 			check_status_vector(api, "isc_dsql_describe_bind", status_vect, {});
 		}
 		else
 		{
-			api.isc_dsql_describe(status_vect, &stmt, DaVersion, data_);
+			api.f_isc_dsql_describe(status_vect, &stmt, DaVersion, data_);
 			check_status_vector(api, "isc_dsql_describe", status_vect, {});
 		}
 	}
@@ -1451,7 +1459,7 @@ void SqlDA::close_blob_handles(const FbApi& api, bool throw_exception)
 	{
 		if (item.blob_handle == 0) continue;
 		ISC_STATUS status_vect[StatusLen] = {};
-		api.isc_close_blob(status_vect, &item.blob_handle);
+		api.f_isc_close_blob(status_vect, &item.blob_handle);
 		item.blob_handle = 0;
 		if (throw_exception)
 			check_status_vector(api, "isc_close_blob", status_vect, {});
@@ -1616,7 +1624,7 @@ void InSqlDA::blob_param(
 	ISC_QUAD& blob_id = as<ISC_QUAD>(var);
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	api.isc_create_blob2(
+	api.f_isc_create_blob2(
 		status_vect,
 		&conn.get_handle(),
 		&tran.get_handle(),
@@ -1631,13 +1639,13 @@ void InSqlDA::blob_param(
 	while (blob_size != 0)
 	{
 		uint16_t len = (blob_size > SHRT_MAX) ? SHRT_MAX : (short)blob_size;
-		api.isc_put_segment(status_vect, &bl_handle, len, blob_data);
+		api.f_isc_put_segment(status_vect, &bl_handle, len, blob_data);
 		check_status_vector(api, "isc_put_segment", status_vect, {});
 		blob_data += len;
 		blob_size -= len;
 	}
 
-	api.isc_close_blob(status_vect, &bl_handle);
+	api.f_isc_close_blob(status_vect, &bl_handle);
 	check_status_vector(api, "isc_close_blob", status_vect, {});
 }
 
@@ -1725,8 +1733,8 @@ void OutSqlDA::get_timestamp(size_t index, TimeStamp& ts)
 }
 
 void OutSqlDA::prepare_blob_handle(
-	const FbApi&       api, 
-	size_t             index, 
+	const FbApi&       api,
+	size_t             index,
 	FbConnectionImpl&  conn,
 	FbTransactionImpl& tran)
 {
@@ -1737,7 +1745,7 @@ void OutSqlDA::prepare_blob_handle(
 	ISC_STATUS status_vect[StatusLen] = {};
 	ISC_QUAD& blob_id = as<ISC_QUAD>(var);
 
-	api.isc_open_blob2(
+	api.f_isc_open_blob2(
 		status_vect,
 		&conn.get_handle(),
 		&tran.get_handle(),
@@ -1752,9 +1760,9 @@ void OutSqlDA::prepare_blob_handle(
 
 
 size_t OutSqlDA::get_blob_size(
-	const FbApi&       api, 
-	size_t             index, 
-	FbConnectionImpl&  conn, 
+	const FbApi&       api,
+	size_t             index,
+	FbConnectionImpl&  conn,
 	FbTransactionImpl& tran)
 {
 	prepare_blob_handle(api, index, conn, tran);
@@ -1766,7 +1774,7 @@ size_t OutSqlDA::get_blob_size(
 	ISC_STATUS status_vect[StatusLen] = {};
 
 	assert(res_buffer.size() <= SHRT_MAX);
-	api.isc_blob_info(
+	api.f_isc_blob_info(
 		status_vect,
 		&bl_handle,
 		sizeof(req_items),
@@ -1782,11 +1790,11 @@ size_t OutSqlDA::get_blob_size(
 
 template<typename I>
 void OutSqlDA::read_blob(
-	const FbApi&       api, 
-	size_t             index, 
-	I                  dst_from, 
-	I                  dst_to, 
-	FbConnectionImpl&  conn, 
+	const FbApi&       api,
+	size_t             index,
+	I                  dst_from,
+	I                  dst_to,
+	FbConnectionImpl&  conn,
 	FbTransactionImpl& tran)
 {
 	if (dst_from == dst_to) return;
@@ -1804,7 +1812,7 @@ void OutSqlDA::read_blob(
 		unsigned short bytes_read = 0;
 		unsigned short to_read = (size < SHRT_MAX) ? (unsigned short)size : SHRT_MAX;
 
-		auto res = api.isc_get_segment(
+		auto res = api.f_isc_get_segment(
 			status_vect,
 			&bl_handle,
 			&bytes_read,
@@ -1831,7 +1839,7 @@ FbStatementImpl::FbStatementImpl(
 	const FbLibDataPtr&         lib,
 	const FbConnectionImplPtr&  conn,
 	const FbTransactionImplPtr& tran
-	
+
 ) :
 	lib_(lib),
 	conn_(conn),
@@ -1872,7 +1880,7 @@ void FbStatementImpl::close(bool throw_exception)
 	in_sqlda_.close_blob_handles(lib_->api, throw_exception);
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_drop);
+	lib_->api.f_isc_dsql_free_statement(status_vect, &stmt_, DSQL_drop);
 
 	if (throw_exception)
 		check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, {});
@@ -1894,7 +1902,7 @@ void FbStatementImpl::close_cursor()
 	has_data_ = false;
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_dsql_free_statement(status_vect, &stmt_, DSQL_close);
+	lib_->api.f_isc_dsql_free_statement(status_vect, &stmt_, DSQL_close);
 	check_status_vector(lib_->api, "isc_dsql_free_statement", status_vect, {});
 }
 
@@ -1905,7 +1913,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 	has_data_ = false;
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_dsql_allocate_statement(
+	lib_->api.f_isc_dsql_allocate_statement(
 		status_vect,
 		&conn_->get_handle(),
 		&stmt_
@@ -1913,7 +1921,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 	check_status_vector(lib_->api, "isc_dsql_allocate_statement", status_vect, {});
 
 	assert(sql.size() <= USHRT_MAX);
-	lib_->api.isc_dsql_prepare(
+	lib_->api.f_isc_dsql_prepare(
 		status_vect,
 		&tran_->get_handle(),
 		&stmt_,
@@ -1926,7 +1934,7 @@ void FbStatementImpl::prepare_impl(std::string_view sql)
 
 	type_ = get_type_internal();
 
-	lib_->api.isc_dsql_describe_bind(
+	lib_->api.f_isc_dsql_describe_bind(
 		status_vect,
 		&stmt_,
 		DaVersion,
@@ -1953,7 +1961,7 @@ StatementType FbStatementImpl::get_type_internal()
 
 	char type_item[] = { isc_info_sql_stmt_type };
 	char res_buffer[128] = {};
-	lib_->api.isc_dsql_sql_info(
+	lib_->api.f_isc_dsql_sql_info(
 		status_vect,
 		&stmt_,
 		sizeof(type_item),
@@ -1963,8 +1971,8 @@ StatementType FbStatementImpl::get_type_internal()
 	);
 	check_status_vector(lib_->api, "isc_dsql_sql_info", status_vect, {});
 
-	int stmt_type_len = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[1], 2);
-	int stmt_type = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)&res_buffer[3], stmt_type_len);
+	int stmt_type_len = (int)lib_->api.f_isc_portable_integer((const ISC_UCHAR*)&res_buffer[1], 2);
+	int stmt_type = (int)lib_->api.f_isc_portable_integer((const ISC_UCHAR*)&res_buffer[3], stmt_type_len);
 
 	switch (stmt_type)
 	{
@@ -1995,7 +2003,7 @@ size_t FbStatementImpl::get_changes_count()
 
 	char type_item[] = { isc_info_sql_records, isc_info_end };
 	char res_buffer[128] = {};
-	lib_->api.isc_dsql_sql_info(
+	lib_->api.f_isc_dsql_sql_info(
 		status_vect,
 		&stmt_,
 		sizeof(type_item),
@@ -2011,9 +2019,9 @@ size_t FbStatementImpl::get_changes_count()
 	for (const char* ptr = res_buffer + 3; *ptr != isc_info_end; )
 	{
 		char type = *ptr++;
-		int len = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)ptr, 2);
+		int len = (int)lib_->api.f_isc_portable_integer((const ISC_UCHAR*)ptr, 2);
 		ptr += 2;
-		int count = (int)lib_->api.isc_portable_integer((const ISC_UCHAR*)ptr, len);
+		int count = (int)lib_->api.f_isc_portable_integer((const ISC_UCHAR*)ptr, len);
 		ptr += len;
 
 		if ((type == isc_info_req_update_count) ||
@@ -2042,7 +2050,7 @@ void FbStatementImpl::internal_execute()
 	close_cursor();
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	lib_->api.isc_dsql_execute2(
+	lib_->api.f_isc_dsql_execute2(
 		status_vect,
 		&tran_->get_handle(),
 		&stmt_,
@@ -2101,7 +2109,7 @@ bool FbStatementImpl::fetch()
 	out_sqlda_.clear_null_flags();
 
 	ISC_STATUS status_vect[StatusLen] = {};
-	ISC_STATUS status = lib_->api.isc_dsql_fetch(status_vect, &stmt_, DaVersion, out_sqlda_.data());
+	ISC_STATUS status = lib_->api.f_isc_dsql_fetch(status_vect, &stmt_, DaVersion, out_sqlda_.data());
 	switch (status)
 	{
 	case 0:

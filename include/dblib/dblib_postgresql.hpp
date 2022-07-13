@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,9 +27,9 @@ THE SOFTWARE.
 #include <map>
 #include <string>
 
-#include "dblib/dblib_conf.hpp"
-#include "dblib/dblib.hpp"
-#include "dblib/postgresql_c_api/libpq-fe.h"
+#include "dblib_conf.hpp"
+#include "dblib.hpp"
+#include "postgresql_c_api/libpq-fe.h"
 
 namespace dblib {
 
@@ -39,38 +39,38 @@ class PgStatement; typedef std::shared_ptr<PgStatement> PgStatementPtr;
 
 struct DBLIB_API PgApi
 {
-	decltype(PQconnectdbParams)           *PQconnectdbParams = nullptr;
-	decltype(PQfinish)                    *PQfinish = nullptr;
-	decltype(PQstatus)                    *PQstatus = nullptr;
-	decltype(PQerrorMessage)              *PQerrorMessage = nullptr;
-	decltype(PQexec)                      *PQexec = nullptr;
-	decltype(PQprepare)                   *PQprepare = nullptr;
-	decltype(PQsendQueryParams)           *PQsendQueryParams = nullptr;
-	decltype(PQsendQueryPrepared)         *PQsendQueryPrepared = nullptr;
-	decltype(PQsetSingleRowMode)          *PQsetSingleRowMode = nullptr;
-	decltype(PQgetResult)                 *PQgetResult = nullptr;
-	decltype(PQresultStatus)              *PQresultStatus = nullptr;
-	decltype(PQresStatus)                 *PQresStatus = nullptr;
-	decltype(PQresultErrorMessage)        *PQresultErrorMessage = nullptr;
-	decltype(PQresultVerboseErrorMessage) *PQresultVerboseErrorMessage = nullptr;
-	decltype(PQresultErrorField)          *PQresultErrorField = nullptr;
-	decltype(PQntuples)                   *PQntuples = nullptr;
-	decltype(PQnfields)                   *PQnfields = nullptr;
-	decltype(PQbinaryTuples)              *PQbinaryTuples = nullptr;
-	decltype(PQfname)                     *PQfname = nullptr;
-	decltype(PQftype)                     *PQftype = nullptr;
-	decltype(PQfsize)                     *PQfsize = nullptr;
-	decltype(PQcmdTuples)                 *PQcmdTuples = nullptr;
-	decltype(PQgetvalue)                  *PQgetvalue = nullptr;
-	decltype(PQgetlength)                 *PQgetlength = nullptr;
-	decltype(PQgetisnull)                 *PQgetisnull = nullptr;
-	decltype(PQnparams)                   *PQnparams = nullptr;
-	decltype(PQparamtype)                 *PQparamtype = nullptr;
-	decltype(PQdescribePrepared)          *PQdescribePrepared = nullptr;
-	decltype(PQclear)                     *PQclear = nullptr;
-	decltype(PQputCopyData)               *PQputCopyData = nullptr;
-	decltype(PQputCopyEnd)                *PQputCopyEnd = nullptr;
-	
+	decltype(PQconnectdbParams)           *f_PQconnectdbParams = nullptr;
+	decltype(PQfinish)                    *f_PQfinish = nullptr;
+	decltype(PQstatus)                    *f_PQstatus = nullptr;
+	decltype(PQerrorMessage)              *f_PQerrorMessage = nullptr;
+	decltype(PQexec)                      *f_PQexec = nullptr;
+	decltype(PQprepare)                   *f_PQprepare = nullptr;
+	decltype(PQsendQueryParams)           *f_PQsendQueryParams = nullptr;
+	decltype(PQsendQueryPrepared)         *f_PQsendQueryPrepared = nullptr;
+	decltype(PQsetSingleRowMode)          *f_PQsetSingleRowMode = nullptr;
+	decltype(PQgetResult)                 *f_PQgetResult = nullptr;
+	decltype(PQresultStatus)              *f_PQresultStatus = nullptr;
+	decltype(PQresStatus)                 *f_PQresStatus = nullptr;
+	decltype(PQresultErrorMessage)        *f_PQresultErrorMessage = nullptr;
+	decltype(PQresultVerboseErrorMessage) *f_PQresultVerboseErrorMessage = nullptr;
+	decltype(PQresultErrorField)          *f_PQresultErrorField = nullptr;
+	decltype(PQntuples)                   *f_PQntuples = nullptr;
+	decltype(PQnfields)                   *f_PQnfields = nullptr;
+	decltype(PQbinaryTuples)              *f_PQbinaryTuples = nullptr;
+	decltype(PQfname)                     *f_PQfname = nullptr;
+	decltype(PQftype)                     *f_PQftype = nullptr;
+	decltype(PQfsize)                     *f_PQfsize = nullptr;
+	decltype(PQcmdTuples)                 *f_PQcmdTuples = nullptr;
+	decltype(PQgetvalue)                  *f_PQgetvalue = nullptr;
+	decltype(PQgetlength)                 *f_PQgetlength = nullptr;
+	decltype(PQgetisnull)                 *f_PQgetisnull = nullptr;
+	decltype(PQnparams)                   *f_PQnparams = nullptr;
+	decltype(PQparamtype)                 *f_PQparamtype = nullptr;
+	decltype(PQdescribePrepared)          *f_PQdescribePrepared = nullptr;
+	decltype(PQclear)                     *f_PQclear = nullptr;
+	decltype(PQputCopyData)               *f_PQputCopyData = nullptr;
+	decltype(PQputCopyEnd)                *f_PQputCopyEnd = nullptr;
+
 };
 
 struct DBLIB_API PgConnectParams
@@ -93,7 +93,7 @@ class DBLIB_API PgLib
 public:
 	virtual ~PgLib();
 
-	virtual void load(const std::wstring_view dyn_lib_file_name = {}) = 0;
+	virtual void load(const FileName &dyn_lib_file_name = {}) = 0;
 	virtual bool is_loaded() const = 0;
 	virtual const PgApi& get_api() = 0;
 	virtual PgConnectionPtr create_connection(const PgConnectParams& connect_params) = 0;

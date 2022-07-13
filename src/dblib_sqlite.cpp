@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,11 @@ THE SOFTWARE.
 */
 
 #include <assert.h>
+#include <float.h>
+#include <string.h>
 #include "dblib_dyn.hpp"
-#include "dblib/dblib_sqlite.hpp"
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_sqlite.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
 #include "dblib_stmt_tools.hpp"
 
 namespace dblib {
@@ -50,7 +52,7 @@ public:
 	SqliteLibImpl();
 	~SqliteLibImpl() override {}
 
-	void load(const std::wstring_view &dyn_lib_file_name) override;
+	void load(const FileName &dyn_lib_file_name) override;
 	bool is_loaded() const override;
 
 	const SqliteApi& get_api() override;
@@ -261,10 +263,10 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void check_sqlite_ret_code(
-	const SqliteApi  &api, 
-	int              ret_code, 
-	const char       *fun_name, 
-	sqlite3          *db, 
+	const SqliteApi  &api,
+	int              ret_code,
+	const char       *fun_name,
+	sqlite3          *db,
 	std::string_view sql,
 	ErrorType        error_type)
 {
@@ -276,10 +278,10 @@ static void check_sqlite_ret_code(
 	throw_exception(
 		fun_name,
 		ret_code,
-		api.sqlite3_extended_errcode(db),
-		api.sqlite3_errstr(ret_code),
+		api.f_sqlite3_extended_errcode(db),
+		api.f_sqlite3_errstr(ret_code),
 		{},
-		api.sqlite3_errmsg(db),
+		api.f_sqlite3_errmsg(db),
 		sql,
 		error_type
 	);
@@ -331,63 +333,69 @@ SqliteLib::~SqliteLib()
 
 /* class SqliteLibImpl */
 
-SqliteLibImpl::SqliteLibImpl() : 
+SqliteLibImpl::SqliteLibImpl() :
 	lib_(std::make_shared<SqliteLibData>())
 {}
 
-void SqliteLibImpl::load(const std::wstring_view &dyn_lib_file_name)
+void SqliteLibImpl::load(const FileName &dyn_lib_file_name)
 {
 	auto &module = lib_->module;
 	auto &api = lib_->api;
 
 	if (module.is_loaded()) return;
 
-	std::wstring file_name_to_load(dyn_lib_file_name.begin(), dyn_lib_file_name.end());
-	if (file_name_to_load.empty())
-		file_name_to_load = L"sqlite3.dll";
+	auto file_name = dyn_lib_file_name;
 
-	module.load(file_name_to_load);
+#if defined(DBLIB_WINDOWS)
+	if (file_name.empty())
+		file_name = L"sqlite3.dll";
+#elif defined(DBLIB_LINUX)
+	if (file_name.empty())
+		file_name = "fbclient.so";
+#endif
 
-	module.load_func(api.sqlite3_close,                "sqlite3_close");
-	module.load_func(api.sqlite3_exec,                 "sqlite3_exec");
-	module.load_func(api.sqlite3_open_v2,              "sqlite3_open_v2");
-	module.load_func(api.sqlite3_errmsg,               "sqlite3_errmsg");
-	module.load_func(api.sqlite3_errstr,               "sqlite3_errstr");
-	module.load_func(api.sqlite3_prepare_v2,           "sqlite3_prepare_v2");
-	module.load_func(api.sqlite3_prepare16_v2,         "sqlite3_prepare16_v2");
-	module.load_func(api.sqlite3_bind_parameter_count, "sqlite3_bind_parameter_count");
-	module.load_func(api.sqlite3_bind_blob,            "sqlite3_bind_blob");
-	module.load_func(api.sqlite3_bind_double,          "sqlite3_bind_double");
-	module.load_func(api.sqlite3_bind_int,             "sqlite3_bind_int");
-	module.load_func(api.sqlite3_bind_int64,           "sqlite3_bind_int64");
-	module.load_func(api.sqlite3_bind_null,            "sqlite3_bind_null");
-	module.load_func(api.sqlite3_bind_text,            "sqlite3_bind_text");
-	module.load_func(api.sqlite3_column_count,         "sqlite3_column_count");
-	module.load_func(api.sqlite3_column_name,          "sqlite3_column_name");
-	module.load_func(api.sqlite3_step,                 "sqlite3_step");
-	module.load_func(api.sqlite3_column_blob,          "sqlite3_column_blob");
-	module.load_func(api.sqlite3_column_bytes,         "sqlite3_column_bytes");
-	module.load_func(api.sqlite3_column_double,        "sqlite3_column_double");
-	module.load_func(api.sqlite3_column_int,           "sqlite3_column_int");
-	module.load_func(api.sqlite3_column_int64,         "sqlite3_column_int64");
-	module.load_func(api.sqlite3_column_text,          "sqlite3_column_text");
-	module.load_func(api.sqlite3_column_text16,        "sqlite3_column_text16");
-	module.load_func(api.sqlite3_column_type,          "sqlite3_column_type");
-	module.load_func(api.sqlite3_finalize,             "sqlite3_finalize");
-	module.load_func(api.sqlite3_reset,                "sqlite3_reset");
-	module.load_func(api.sqlite3_bind_parameter_index, "sqlite3_bind_parameter_index");
-	module.load_func(api.sqlite3_changes,              "sqlite3_changes");
-	module.load_func(api.sqlite3_last_insert_rowid,    "sqlite3_last_insert_rowid");
-	module.load_func(api.sqlite3_create_function_v2,   "sqlite3_create_function_v2");
-	module.load_func(api.sqlite3_value_type,           "sqlite3_value_type");
-	module.load_func(api.sqlite3_value_text16,         "sqlite3_value_text16");
-	module.load_func(api.sqlite3_value_text,           "sqlite3_value_text");
-	module.load_func(api.sqlite3_user_data,            "sqlite3_user_data");
-	module.load_func(api.sqlite3_result_text16,        "sqlite3_result_text16");
-	module.load_func(api.sqlite3_result_value,         "sqlite3_result_value");
-	module.load_func(api.sqlite3_result_text,          "sqlite3_result_text");
-	module.load_func(api.sqlite3_busy_timeout,         "sqlite3_busy_timeout");
-	module.load_func(api.sqlite3_extended_errcode,     "sqlite3_extended_errcode");
+	module.load(file_name);
+
+	module.load_func(api.f_sqlite3_close,                "sqlite3_close");
+	module.load_func(api.f_sqlite3_exec,                 "sqlite3_exec");
+	module.load_func(api.f_sqlite3_open_v2,              "sqlite3_open_v2");
+	module.load_func(api.f_sqlite3_errmsg,               "sqlite3_errmsg");
+	module.load_func(api.f_sqlite3_errstr,               "sqlite3_errstr");
+	module.load_func(api.f_sqlite3_prepare_v2,           "sqlite3_prepare_v2");
+	module.load_func(api.f_sqlite3_prepare16_v2,         "sqlite3_prepare16_v2");
+	module.load_func(api.f_sqlite3_bind_parameter_count, "sqlite3_bind_parameter_count");
+	module.load_func(api.f_sqlite3_bind_blob,            "sqlite3_bind_blob");
+	module.load_func(api.f_sqlite3_bind_double,          "sqlite3_bind_double");
+	module.load_func(api.f_sqlite3_bind_int,             "sqlite3_bind_int");
+	module.load_func(api.f_sqlite3_bind_int64,           "sqlite3_bind_int64");
+	module.load_func(api.f_sqlite3_bind_null,            "sqlite3_bind_null");
+	module.load_func(api.f_sqlite3_bind_text,            "sqlite3_bind_text");
+	module.load_func(api.f_sqlite3_column_count,         "sqlite3_column_count");
+	module.load_func(api.f_sqlite3_column_name,          "sqlite3_column_name");
+	module.load_func(api.f_sqlite3_step,                 "sqlite3_step");
+	module.load_func(api.f_sqlite3_column_blob,          "sqlite3_column_blob");
+	module.load_func(api.f_sqlite3_column_bytes,         "sqlite3_column_bytes");
+	module.load_func(api.f_sqlite3_column_double,        "sqlite3_column_double");
+	module.load_func(api.f_sqlite3_column_int,           "sqlite3_column_int");
+	module.load_func(api.f_sqlite3_column_int64,         "sqlite3_column_int64");
+	module.load_func(api.f_sqlite3_column_text,          "sqlite3_column_text");
+	module.load_func(api.f_sqlite3_column_text16,        "sqlite3_column_text16");
+	module.load_func(api.f_sqlite3_column_type,          "sqlite3_column_type");
+	module.load_func(api.f_sqlite3_finalize,             "sqlite3_finalize");
+	module.load_func(api.f_sqlite3_reset,                "sqlite3_reset");
+	module.load_func(api.f_sqlite3_bind_parameter_index, "sqlite3_bind_parameter_index");
+	module.load_func(api.f_sqlite3_changes,              "sqlite3_changes");
+	module.load_func(api.f_sqlite3_last_insert_rowid,    "sqlite3_last_insert_rowid");
+	module.load_func(api.f_sqlite3_create_function_v2,   "sqlite3_create_function_v2");
+	module.load_func(api.f_sqlite3_value_type,           "sqlite3_value_type");
+	module.load_func(api.f_sqlite3_value_text16,         "sqlite3_value_text16");
+	module.load_func(api.f_sqlite3_value_text,           "sqlite3_value_text");
+	module.load_func(api.f_sqlite3_user_data,            "sqlite3_user_data");
+	module.load_func(api.f_sqlite3_result_text16,        "sqlite3_result_text16");
+	module.load_func(api.f_sqlite3_result_value,         "sqlite3_result_value");
+	module.load_func(api.f_sqlite3_result_text,          "sqlite3_result_text");
+	module.load_func(api.f_sqlite3_busy_timeout,         "sqlite3_busy_timeout");
+	module.load_func(api.f_sqlite3_extended_errcode,     "sqlite3_extended_errcode");
 }
 
 bool SqliteLibImpl::is_loaded() const
@@ -402,7 +410,7 @@ const SqliteApi& SqliteLibImpl::get_api()
 }
 
 SqliteConnectionPtr SqliteLibImpl::create_connection(
-	const std::wstring &file_name, 
+	const std::wstring &file_name,
 	const SqliteConfig &config)
 {
 	assert(lib_->module.is_loaded());
@@ -410,7 +418,7 @@ SqliteConnectionPtr SqliteLibImpl::create_connection(
 }
 
 SqliteConnectionPtr SqliteLibImpl::create_connection(
-	const std::string  &file_name_utf8, 
+	const std::string  &file_name_utf8,
 	const SqliteConfig &config)
 {
 	assert(lib_->module.is_loaded());
@@ -422,7 +430,7 @@ SqliteConnectionPtr SqliteLibImpl::create_connection(
 
 SqliteConnectionImpl::SqliteConnectionImpl(
 	const SqliteLibImplPtr &lib,
-	const std::string      &file_name_utf8, 
+	const std::string      &file_name_utf8,
 	const SqliteConfig     &config)
 {
 	this->file_name_utf8_ = file_name_utf8;
@@ -453,7 +461,7 @@ void SqliteConnectionImpl::connect()
 		break;
 	}
 
-	int res = lib_->api.sqlite3_open_v2(
+	int res = lib_->api.f_sqlite3_open_v2(
 		file_name_utf8_.c_str(),
 		&db_,
 		flags,
@@ -465,7 +473,7 @@ void SqliteConnectionImpl::connect()
 	auto direct_execute_helper = [this](const char *format, auto arg)
 	{
 		char pragma_buffer[256] = {};
-		sprintf_s(pragma_buffer, format, arg);
+		snprintf(pragma_buffer, sizeof(pragma_buffer), format, arg);
 		direct_execute(pragma_buffer);
 	};
 
@@ -479,13 +487,13 @@ void SqliteConnectionImpl::connect()
 
 	if (config_.foreign_keys != SqliteForignKey::Default)
 		direct_execute_helper(
-			"PRAGMA foreign_keys = %s;", 
+			"PRAGMA foreign_keys = %s;",
 			(config_.foreign_keys == SqliteForignKey::True) ? "true" : "false"
 		);
 
 	if (config_.case_sensitive_like != SqliteCILike::Default)
 		direct_execute_helper(
-			"PRAGMA case_sensitive_like = %s;", 
+			"PRAGMA case_sensitive_like = %s;",
 			(config_.case_sensitive_like == SqliteCILike::True) ? "true" : "false"
 		);
 
@@ -494,7 +502,7 @@ void SqliteConnectionImpl::connect()
 
 	if (config_.journal_mode != SqliteJournalMode::Default)
 		direct_execute_helper(
-			"PRAGMA journal_mode = %s;", 
+			"PRAGMA journal_mode = %s;",
 			journal_mode_to_str(config_.journal_mode)
 		);
 }
@@ -532,7 +540,7 @@ void SqliteConnectionImpl::direct_execute(std::string_view sql)
 {
 	check_is_connected();
 	tmp_sql_text_ = sql;
-	int res = lib_->api.sqlite3_exec(db_, tmp_sql_text_.c_str(), nullptr, nullptr, nullptr);
+	int res = lib_->api.f_sqlite3_exec(db_, tmp_sql_text_.c_str(), nullptr, nullptr, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", db_, sql, ErrorType::Normal);
 }
 
@@ -555,8 +563,8 @@ void SqliteConnectionImpl::check_is_connected()
 
 void SqliteConnectionImpl::disconnect_internal(bool check_ret_code)
 {
-	int res = lib_->api.sqlite3_close(db_);
-	if (check_ret_code) 
+	int res = lib_->api.f_sqlite3_close(db_);
+	if (check_ret_code)
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_close", db_, {}, ErrorType::Connection);
 	db_ = nullptr;
 }
@@ -566,7 +574,7 @@ sqlite3* SqliteConnectionImpl::get_instance()
 	return db_;
 }
 
-SQLiteTransactionPtr 
+SQLiteTransactionPtr
 SqliteConnectionImpl::create_sqlite_transaction(const TransactionParams &transaction_params)
 {
 	check_is_connected();
@@ -642,12 +650,12 @@ void SQLiteTransactionImpl::internal_start()
 		throw WrongSeqException("Only one transaction is allowed per one SQLite connection");
 
 	if (busy_time_out_ != -1)
-		lib_->api.sqlite3_busy_timeout(conn_->get_instance(), busy_time_out_);
-	else 
-		lib_->api.sqlite3_busy_timeout(conn_->get_instance(), 0);
+		lib_->api.f_sqlite3_busy_timeout(conn_->get_instance(), busy_time_out_);
+	else
+		lib_->api.f_sqlite3_busy_timeout(conn_->get_instance(), 0);
 
 	const char* sql = "begin";
-	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	int res = lib_->api.f_sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
 
 	conn_->set_transaction_is_active(true);
@@ -659,7 +667,7 @@ void SQLiteTransactionImpl::internal_commit()
 	conn_->set_transaction_is_active(false);
 
 	const char* sql = "commit";
-	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	int res = lib_->api.f_sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
 }
 
@@ -669,7 +677,7 @@ void SQLiteTransactionImpl::internal_rollback()
 	conn_->set_transaction_is_active(false);
 
 	const char* sql = "rollback";
-	int res = lib_->api.sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
+	int res = lib_->api.f_sqlite3_exec(conn_->get_instance(), sql, nullptr, nullptr, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_exec", conn_->get_instance(), sql, ErrorType::Transaction);
 }
 
@@ -678,7 +686,7 @@ void SQLiteTransactionImpl::internal_rollback()
 
 SQLiteStatementImpl::SQLiteStatementImpl(
 	const SqliteLibImplPtr         &lib,
-	const SqliteConnectionImplPtr  &conn, 
+	const SqliteConnectionImplPtr  &conn,
 	const SQLiteTransactionImplPtr &tran
 ) :
 	lib_(lib),
@@ -700,7 +708,7 @@ TransactionPtr SQLiteStatementImpl::get_transaction()
 void SQLiteStatementImpl::close(bool check_ret_code)
 {
 	if (stmt_ == nullptr) return;
-	int res = lib_->api.sqlite3_finalize(stmt_);
+	int res = lib_->api.f_sqlite3_finalize(stmt_);
 	if (check_ret_code)
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_finalize", conn_->get_instance(), {}, ErrorType::Normal);
 	stmt_ = nullptr;
@@ -726,8 +734,8 @@ void SQLiteStatementImpl::prepare(std::string_view sql, bool use_native_paramete
 	last_sql_ = sql;
 
 	sql_preprocessor_.preprocess(
-		sql, 
-		use_native_parameters_syntax, 
+		sql,
+		use_native_parameters_syntax,
 		false,
 		SQLiteSqlPreprocessorActions()
 	);
@@ -738,7 +746,7 @@ void SQLiteStatementImpl::prepare(std::string_view sql, bool use_native_paramete
 
 	auto& preprocessed_sql = sql_preprocessor_.get_preprocessed_sql();
 
-	int res = lib_->api.sqlite3_prepare_v2(
+	int res = lib_->api.f_sqlite3_prepare_v2(
 		conn_->get_instance(),
 		preprocessed_sql.data(),
 		(int)preprocessed_sql.size(),
@@ -764,16 +772,16 @@ void SQLiteStatementImpl::internal_execute(bool do_reset_if_needed)
 {
 	if (do_reset_if_needed) reset_statement();
 
-	last_step_result_ = lib_->api.sqlite3_step(stmt_);
+	last_step_result_ = lib_->api.f_sqlite3_step(stmt_);
 
 	if ((last_step_result_ == SQLITE_DONE) || (last_step_result_ == SQLITE_ROW))
 		must_be_reseted_ = true;
 
 	else
 		check_sqlite_ret_code(
-			lib_->api, 
-			last_step_result_, 
-			"sqlite3_step", 
+			lib_->api,
+			last_step_result_,
+			"sqlite3_step",
 			conn_->get_instance(),
 			last_sql_,
 			ErrorType::Normal
@@ -783,7 +791,7 @@ void SQLiteStatementImpl::internal_execute(bool do_reset_if_needed)
 void SQLiteStatementImpl::reset_statement() const
 {
 	if (!must_be_reseted_) return;
-	int res = lib_->api.sqlite3_reset(stmt_);
+	int res = lib_->api.f_sqlite3_reset(stmt_);
 	must_be_reseted_ = false;
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_reset", conn_->get_instance(), {}, ErrorType::Normal);
 }
@@ -797,12 +805,12 @@ void SQLiteStatementImpl::execute()
 
 size_t SQLiteStatementImpl::get_changes_count()
 {
-	return lib_->api.sqlite3_changes(conn_->get_instance());
+	return lib_->api.f_sqlite3_changes(conn_->get_instance());
 }
 
 int64_t SQLiteStatementImpl::get_last_row_id()
 {
-	return lib_->api.sqlite3_last_insert_rowid(conn_->get_instance());
+	return lib_->api.f_sqlite3_last_insert_rowid(conn_->get_instance());
 }
 
 std::string SQLiteStatementImpl::get_last_sql() const
@@ -845,7 +853,7 @@ bool SQLiteStatementImpl::fetch()
 size_t SQLiteStatementImpl::get_params_count() const
 {
 	check_is_prepared();
-	return lib_->api.sqlite3_bind_parameter_count(stmt_);
+	return lib_->api.f_sqlite3_bind_parameter_count(stmt_);
 }
 
 ValueType SQLiteStatementImpl::get_param_type(const IndexOrName& param)
@@ -856,12 +864,12 @@ ValueType SQLiteStatementImpl::get_param_type(const IndexOrName& param)
 
 int SQLiteStatementImpl::get_param_index(const IndexOrName& param)
 {
-	if (param.get_type() == IndexOrNameType::Index) 
+	if (param.get_type() == IndexOrNameType::Index)
 		return (int)param.get_index();
 
 	parameter_name_tmp_ = param.get_name();
 
-	int result = lib_->api.sqlite3_bind_parameter_index(stmt_, parameter_name_tmp_.c_str());
+	int result = lib_->api.f_sqlite3_bind_parameter_index(stmt_, parameter_name_tmp_.c_str());
 	if (result == 0)
 		throw ParameterNotFoundException(param.to_str());
 
@@ -877,7 +885,7 @@ void SQLiteStatementImpl::set_null(const IndexOrName& param)
 
 void SQLiteStatementImpl::set_null_impl(int index)
 {
-	int res = lib_->api.sqlite3_bind_null(stmt_, index);
+	int res = lib_->api.f_sqlite3_bind_null(stmt_, index);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_null", conn_->get_instance(), {}, ErrorType::Normal);
 }
 
@@ -888,7 +896,7 @@ void SQLiteStatementImpl::set_int32_opt(const IndexOrName& param, Int32Opt value
 	auto index = get_param_index(param);
 	if (value.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_int(stmt_, index, *value);
+		int res = lib_->api.f_sqlite3_bind_int(stmt_, index, *value);
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -902,7 +910,7 @@ void SQLiteStatementImpl::set_int64_opt(const IndexOrName& param, Int64Opt value
 	auto index = get_param_index(param);
 	if (value.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_int64(stmt_, index, *value);
+		int res = lib_->api.f_sqlite3_bind_int64(stmt_, index, *value);
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -916,7 +924,7 @@ void SQLiteStatementImpl::set_float_opt(const IndexOrName& param, FloatOpt value
 	auto index = get_param_index(param);
 	if (value.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, *value);
+		int res = lib_->api.f_sqlite3_bind_double(stmt_, index, *value);
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -930,7 +938,7 @@ void SQLiteStatementImpl::set_double_opt(const IndexOrName& param, DoubleOpt val
 	auto index = get_param_index(param);
 	if (value.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, *value);
+		int res = lib_->api.f_sqlite3_bind_double(stmt_, index, *value);
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_double", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -944,11 +952,11 @@ void SQLiteStatementImpl::set_u8str_opt(const IndexOrName& param, const StringOp
 	auto index = get_param_index(param);
 	if (text.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_text(
-			stmt_, 
-			index, 
-			text->data(), 
-			(int)text->size(), 
+		int res = lib_->api.f_sqlite3_bind_text(
+			stmt_,
+			index,
+			text->data(),
+			(int)text->size(),
 			SQLITE_TRANSIENT
 		);
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_text", conn_->get_instance(), {}, ErrorType::Normal);
@@ -969,7 +977,7 @@ void SQLiteStatementImpl::set_date_opt(const IndexOrName& param, const DateOpt &
 	auto index = get_param_index(param);
 	if (date.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, date_to_julianday(*date));
+		int res = lib_->api.f_sqlite3_bind_double(stmt_, index, date_to_julianday(*date));
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -983,7 +991,7 @@ void SQLiteStatementImpl::set_time_opt(const IndexOrName& param, const TimeOpt &
 	auto index = get_param_index(param);
 	if (time.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, time_to_days(*time));
+		int res = lib_->api.f_sqlite3_bind_double(stmt_, index, time_to_days(*time));
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -997,7 +1005,7 @@ void SQLiteStatementImpl::set_timestamp_opt(const IndexOrName& param, const Time
 	auto index = get_param_index(param);
 	if (ts.has_value())
 	{
-		int res = lib_->api.sqlite3_bind_double(stmt_, index, timestamp_to_julianday(*ts));
+		int res = lib_->api.f_sqlite3_bind_double(stmt_, index, timestamp_to_julianday(*ts));
 		check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_int64", conn_->get_instance(), {}, ErrorType::Normal);
 	}
 	else
@@ -1005,35 +1013,35 @@ void SQLiteStatementImpl::set_timestamp_opt(const IndexOrName& param, const Time
 }
 
 void SQLiteStatementImpl::set_blob(
-	const IndexOrName& param, 
-	const char*        blob_data, 
+	const IndexOrName& param,
+	const char*        blob_data,
 	size_t             blob_size)
 {
 	check_is_prepared();
 	reset_statement();
 	auto index = get_param_index(param);
-	int res = lib_->api.sqlite3_bind_blob(stmt_, index, blob_data, (int)blob_size, nullptr);
+	int res = lib_->api.f_sqlite3_bind_blob(stmt_, index, blob_data, (int)blob_size, nullptr);
 	check_sqlite_ret_code(lib_->api, res, "sqlite3_bind_blob", conn_->get_instance(), {}, ErrorType::Normal);
 }
 
 size_t SQLiteStatementImpl::get_columns_count()
 {
 	check_is_prepared();
-	return lib_->api.sqlite3_column_count(stmt_);
+	return lib_->api.f_sqlite3_column_count(stmt_);
 }
 
 ValueType SQLiteStatementImpl::get_column_type(const IndexOrName& column)
 {
 	check_is_prepared();
 	auto index = columns_helper_.get_column_index(column);
-	int sqlite_type = lib_->api.sqlite3_column_type(stmt_, (int)index - 1);
+	int sqlite_type = lib_->api.f_sqlite3_column_type(stmt_, (int)index - 1);
 	return cvt_sqlite_type_to_lib_type(sqlite_type);
 }
 
 std::string SQLiteStatementImpl::get_column_name(size_t index)
 {
 	check_is_prepared();
-	return lib_->api.sqlite3_column_name(stmt_, (int)index - 1);
+	return lib_->api.f_sqlite3_column_name(stmt_, (int)index - 1);
 }
 
 bool SQLiteStatementImpl::is_null(const IndexOrName& column)
@@ -1045,7 +1053,7 @@ bool SQLiteStatementImpl::is_null(const IndexOrName& column)
 
 bool SQLiteStatementImpl::is_null_impl(size_t index) const
 {
-	return lib_->api.sqlite3_column_type(stmt_, (int)index - 1) == SQLITE_NULL;
+	return lib_->api.f_sqlite3_column_type(stmt_, (int)index - 1) == SQLITE_NULL;
 }
 
 Int32Opt SQLiteStatementImpl::get_int32_opt(const IndexOrName& column)
@@ -1054,7 +1062,7 @@ Int32Opt SQLiteStatementImpl::get_int32_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return lib_->api.sqlite3_column_int(stmt_, (int)index - 1);
+	return lib_->api.f_sqlite3_column_int(stmt_, (int)index - 1);
 }
 
 
@@ -1064,7 +1072,7 @@ Int64Opt SQLiteStatementImpl::get_int64_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return lib_->api.sqlite3_column_int64(stmt_, (int)index - 1);
+	return lib_->api.f_sqlite3_column_int64(stmt_, (int)index - 1);
 }
 
 FloatOpt SQLiteStatementImpl::get_float_opt(const IndexOrName& column)
@@ -1073,7 +1081,7 @@ FloatOpt SQLiteStatementImpl::get_float_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	double result = lib_->api.sqlite3_column_double(stmt_, (int)index - 1);
+	double result = lib_->api.f_sqlite3_column_double(stmt_, (int)index - 1);
 	if ((result > FLT_MAX) || (result < -FLT_MAX))
 		throw WrongTypeConvException("Value of column exceeds range for float type");
 	return static_cast<float>(result);
@@ -1085,7 +1093,7 @@ DoubleOpt SQLiteStatementImpl::get_double_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return lib_->api.sqlite3_column_double(stmt_, (int)index - 1);
+	return lib_->api.f_sqlite3_column_double(stmt_, (int)index - 1);
 }
 
 StringOpt SQLiteStatementImpl::get_str_utf8_opt(const IndexOrName& column)
@@ -1094,7 +1102,7 @@ StringOpt SQLiteStatementImpl::get_str_utf8_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	const char *result = (const char*)lib_->api.sqlite3_column_text(stmt_, (int)index - 1);
+	const char *result = (const char*)lib_->api.f_sqlite3_column_text(stmt_, (int)index - 1);
 	return result ? result : std::string();
 }
 
@@ -1104,7 +1112,7 @@ WStringOpt SQLiteStatementImpl::get_wstr_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	const wchar_t *result = (const wchar_t*)lib_->api.sqlite3_column_text16(stmt_, (int)index - 1);
+	const wchar_t *result = (const wchar_t*)lib_->api.f_sqlite3_column_text16(stmt_, (int)index - 1);
 	return result ? std::wstring(result) : std::wstring();
 }
 
@@ -1114,7 +1122,7 @@ DateOpt SQLiteStatementImpl::get_date_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return julianday_to_date(lib_->api.sqlite3_column_double(stmt_, (int)index - 1));
+	return julianday_to_date(lib_->api.f_sqlite3_column_double(stmt_, (int)index - 1));
 }
 
 TimeOpt SQLiteStatementImpl::get_time_opt(const IndexOrName& column)
@@ -1123,7 +1131,7 @@ TimeOpt SQLiteStatementImpl::get_time_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return days_to_time(lib_->api.sqlite3_column_double(stmt_, (int)index - 1));
+	return days_to_time(lib_->api.f_sqlite3_column_double(stmt_, (int)index - 1));
 }
 
 TimeStampOpt SQLiteStatementImpl::get_timestamp_opt(const IndexOrName& column)
@@ -1132,7 +1140,7 @@ TimeStampOpt SQLiteStatementImpl::get_timestamp_opt(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	return julianday_to_timestamp(lib_->api.sqlite3_column_double(stmt_, (int)index - 1));
+	return julianday_to_timestamp(lib_->api.f_sqlite3_column_double(stmt_, (int)index - 1));
 }
 
 size_t SQLiteStatementImpl::get_blob_size(const IndexOrName& column)
@@ -1141,7 +1149,7 @@ size_t SQLiteStatementImpl::get_blob_size(const IndexOrName& column)
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) throw ColumnValueIsNullException(column.to_str());
-	return lib_->api.sqlite3_column_bytes(stmt_, (int)index - 1);
+	return lib_->api.f_sqlite3_column_bytes(stmt_, (int)index - 1);
 }
 
 void SQLiteStatementImpl::get_blob_data(const IndexOrName& column, char *dst, size_t size)
@@ -1150,12 +1158,12 @@ void SQLiteStatementImpl::get_blob_data(const IndexOrName& column, char *dst, si
 	check_contains_data();
 	auto index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) throw ColumnValueIsNullException(column.to_str());
-	int blob_size = lib_->api.sqlite3_column_bytes(stmt_, (int)index - 1);
+	int blob_size = lib_->api.f_sqlite3_column_bytes(stmt_, (int)index - 1);
 
 	if (size > (size_t)blob_size)
 		throw WrongTypeConvException("Buffer size is larger than blob size");
 
-	auto src = lib_->api.sqlite3_column_blob(stmt_, (int)index - 1);
+	auto src = lib_->api.f_sqlite3_column_blob(stmt_, (int)index - 1);
 	memcpy(dst, src, size);
 }
 

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,8 +24,8 @@ THE SOFTWARE.
 
 
 #include "dblib_type_cvt.hpp"
-#include "dblib/dblib_exception.hpp"
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
 
 namespace dblib {
 
@@ -48,17 +48,17 @@ ExceptionEx::ExceptionEx(const std::string &text, int code, int ext_code) :
 	text_buffer_.push_back(0);
 }
 
-int ExceptionEx::get_code() const 
-{ 
-	return code_; 
+int ExceptionEx::get_code() const
+{
+	return code_;
 }
 
-int ExceptionEx::get_ext_code() const 
-{ 
-	return ext_code_; 
+int ExceptionEx::get_ext_code() const
+{
+	return ext_code_;
 }
 
-char const* ExceptionEx::what() const
+char const* ExceptionEx::what() const noexcept
 {
 	return text_buffer_.data();
 }
@@ -67,23 +67,23 @@ char const* ExceptionEx::what() const
 // TypeRangeExceeds
 
 TypeRangeExceeds::TypeRangeExceeds(const std::string &text) :
-	ExceptionEx(text, 0, 0) 
+	ExceptionEx(text, 0, 0)
 {}
 
 
 // WrongTypeConvException
 
 WrongTypeConvException::WrongTypeConvException(const std::string &text) :
-	ExceptionEx(text, 0, 0) 
+	ExceptionEx(text, 0, 0)
 {}
 
 WrongTypeConvException::WrongTypeConvException(
-	std::string_view from_type_name, 
+	std::string_view from_type_name,
 	std::string_view to_type_name
-) : 
+) :
 	ExceptionEx(
 		"Can't convert from from " + std::string(from_type_name) + " to " + std::string(to_type_name),
-		0, 
+		0,
 		0
 	)
 {}
@@ -92,14 +92,14 @@ WrongTypeConvException::WrongTypeConvException(
 // InternalException
 
 InternalException::InternalException(const std::string &text, int code, int ext_code) :
-	ExceptionEx(text, code, ext_code) 
+	ExceptionEx(text, code, ext_code)
 {}
 
 
 // TypeNotSupportedException
 
 TypeNotSupportedException::TypeNotSupportedException(const std::string &type) :
-	InternalException("Type '" + type + "' is not supported", -1, -1) 
+	InternalException("Type '" + type + "' is not supported", -1, -1)
 {}
 
 
@@ -125,20 +125,20 @@ TransactionLevelNotSupportedException::TransactionLevelNotSupportedException(Tra
 // WrongSeqException
 
 WrongSeqException::WrongSeqException(const std::string &text) :
-	ExceptionEx(text, 0, 0) 
+	ExceptionEx(text, 0, 0)
 {}
 
 
 // WrongArgumentException
 
 WrongArgumentException::WrongArgumentException(const std::string &text) :
-	ExceptionEx(text, 0, 0) 
+	ExceptionEx(text, 0, 0)
 {}
 
 
 // WrongParameterType
 
-char const* WrongParameterType::what() const
+char const* WrongParameterType::what() const noexcept
 {
 	return "Wrong parameter type";
 }
@@ -146,7 +146,7 @@ char const* WrongParameterType::what() const
 
 // WrongColumnType
 
-char const* WrongColumnType::what() const
+char const* WrongColumnType::what() const noexcept
 {
 	return "Wrong column type";
 }
@@ -161,7 +161,7 @@ ColumnNotFoundException::ColumnNotFoundException(std::string_view column_name)
 	error_text_.append(" not found");
 }
 
-char const* ColumnNotFoundException::what() const
+char const* ColumnNotFoundException::what() const noexcept
 {
 	return error_text_.c_str();
 }
@@ -176,7 +176,7 @@ ParameterNotFoundException::ParameterNotFoundException(std::string_view param_na
 	error_text_.append(" not found");
 }
 
-char const* ParameterNotFoundException::what() const
+char const* ParameterNotFoundException::what() const noexcept
 {
 	return error_text_.c_str();
 }
@@ -184,7 +184,7 @@ char const* ParameterNotFoundException::what() const
 
 // FunctionalityNotSupported
 
-char const* FunctionalityNotSupported::what() const
+char const* FunctionalityNotSupported::what() const noexcept
 {
 	return "Functionality is not supported";
 }
@@ -199,7 +199,7 @@ ColumnValueIsNullException::ColumnValueIsNullException(std::string_view column_n
 	error_text_.append(" is NULL");
 }
 
-char const* ColumnValueIsNullException::what() const
+char const* ColumnValueIsNullException::what() const noexcept
 {
 	return error_text_.c_str();
 }
@@ -207,7 +207,7 @@ char const* ColumnValueIsNullException::what() const
 
 // EmptyParameterException
 
-char const* EmptyParameterNameException::what() const
+char const* EmptyParameterNameException::what() const noexcept
 {
 	return "Empty parameter name";
 }
@@ -215,10 +215,15 @@ char const* EmptyParameterNameException::what() const
 
 // SharedLibLoadError
 
-SharedLibLoadError::SharedLibLoadError(const std::wstring& lib_file_name, int os_err_code) :
-	ExceptionEx(L"Fail to load " + lib_file_name, os_err_code, -1)
-{}
-
+#if defined(DBLIB_WINDOWS)
+	SharedLibLoadError::SharedLibLoadError(const std::wstring& lib_file_name, int os_err_code) :
+		ExceptionEx(L"Fail to load " + lib_file_name, os_err_code, -1)
+	{}
+#elif defined(DBLIB_LINUX)
+	SharedLibLoadError::SharedLibLoadError(const std::string& lib_file_name, const char *os_err_text) :
+		ExceptionEx("Fail to load " + lib_file_name + ": " + os_err_text, -1, -1)
+	{}
+#endif
 
 // SharedLibProcNotFoundError
 

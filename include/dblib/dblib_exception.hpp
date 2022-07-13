@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -43,7 +43,7 @@ public:
 	ExceptionEx(const std::string &text, int code, int ext_code);
 	int get_code() const;
 	int get_ext_code() const;
-	char const* what() const override;
+	char const* what() const noexcept override;
 
 private:
 	int code_;
@@ -116,20 +116,20 @@ public:
 class DBLIB_API WrongParameterType : public Exception
 {
 public:
-	char const* what() const override;
+	char const* what() const noexcept override;
 };
 
 class DBLIB_API WrongColumnType : public Exception
 {
 public:
-	char const* what() const override;
+	char const* what() const noexcept override;
 };
 
 class DBLIB_API ColumnNotFoundException : public Exception
 {
 public:
 	ColumnNotFoundException(std::string_view column_name);
-	char const* what() const override;
+	char const* what() const noexcept override;
 
 private:
 	std::string error_text_;
@@ -139,7 +139,7 @@ class DBLIB_API ParameterNotFoundException : public Exception
 {
 public:
 	ParameterNotFoundException(std::string_view param_name);
-	char const* what() const override;
+	char const* what() const noexcept override;
 
 private:
 	std::string error_text_;
@@ -148,7 +148,7 @@ private:
 class DBLIB_API FunctionalityNotSupported : public Exception
 {
 public:
-	char const* what() const override;
+	char const* what() const noexcept override;
 };
 
 class DBLIB_API ConnectionLostException : public ExceptionEx
@@ -161,7 +161,7 @@ class DBLIB_API ColumnValueIsNullException : public Exception
 {
 public:
 	ColumnValueIsNullException(std::string_view column_name);
-	char const* what() const override;
+	char const* what() const noexcept override;
 
 private:
 	std::string error_text_;
@@ -170,13 +170,17 @@ private:
 class DBLIB_API EmptyParameterNameException : public Exception
 {
 public:
-	char const* what() const override;
+	char const* what() const noexcept override;
 };
 
 class DBLIB_API SharedLibLoadError : public ExceptionEx
 {
 public:
+#if defined(DBLIB_WINDOWS)
 	SharedLibLoadError(const std::wstring& lib_file_name, int os_err_code);
+#elif defined(DBLIB_LINUX)
+	SharedLibLoadError(const std::string& lib_file_name, const char *os_err_text);
+#endif
 };
 
 class DBLIB_API SharedLibProcNotFoundError : public ExceptionEx

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2017 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,10 +24,11 @@ THE SOFTWARE.
 
 #include <vector>
 #include <array>
+#include <string.h>
 #include <assert.h>
-#include "dblib/dblib_postgresql.hpp"
-#include "dblib/dblib_exception.hpp"
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib_postgresql.hpp"
+#include "../include/dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
 #include "dblib_stmt_tools.hpp"
 #include "dblib_type_cvt.hpp"
 #include "dblib_dyn.hpp"
@@ -102,7 +103,7 @@ void PgBuffer::write_opt(const std::optional<T>& value)
 	++col_count_;
 }
 
-template <typename T> 
+template <typename T>
 void PgBuffer::write_value(T value)
 {
 	write_value_into_bytes_be<T>(value, be_buffer_);
@@ -284,7 +285,7 @@ public:
 	~PGresultHandler()
 	{
 		if (res_)
-			api_.PQclear(res_);
+			api_.f_PQclear(res_);
 	}
 
 	PGresult* get()
@@ -295,7 +296,7 @@ public:
 	void set(PGresult* value)
 	{
 		if (res_)
-			api_.PQclear(res_);
+			api_.f_PQclear(res_);
 
 		res_ = value;
 	}
@@ -324,7 +325,7 @@ class PgLibImpl : public PgLib
 public:
 	PgLibImpl();
 
-	void load(const std::wstring_view dyn_lib_file_name) override;
+	void load(const FileName &dyn_lib_file_name) override;
 	bool is_loaded() const override;
 	const PgApi& get_api() override;
 	PgConnectionPtr create_connection(const PgConnectParams& connect_params) override;
@@ -336,8 +337,8 @@ private:
 
 /* class PgConnectionImpl */
 
-class PgConnectionImpl : 
-	public PgConnection, 
+class PgConnectionImpl :
+	public PgConnection,
 	public std::enable_shared_from_this<PgConnectionImpl>
 {
 public:
@@ -375,7 +376,7 @@ using PgConnectionImplPtr = std::shared_ptr<PgConnectionImpl>;
 
 /* class PgTransactionImpl */
 
-class PgTransactionImpl : 
+class PgTransactionImpl :
 	public PgTransaction,
 	public std::enable_shared_from_this<PgTransactionImpl>
 {
@@ -581,7 +582,7 @@ private:
 	void add_indexed_param(int param_index, std::string& sql) const
 	{
 		char buffer[12] = {};
-		sprintf_s(buffer, "%d", param_index);
+		snprintf(buffer, sizeof(buffer), "%d", param_index);
 		sql.append("$");
 		sql.append(buffer);
 	}
@@ -592,22 +593,22 @@ using Statuses = std::initializer_list<ExecStatusType>;
 static void check_result_status(
 	const PgApi      &api,
 	const PGconn     *conn,
-	const PGresult   *res, 
-	const char       *fun_name, 
+	const PGresult   *res,
+	const char       *fun_name,
 	Statuses         ok_statuses,
 	std::string_view sql,
 	ErrorType        error_type)
 {
 	if (res == nullptr) return;
 
-	auto res_status = api.PQresultStatus(res);
+	auto res_status = api.f_PQresultStatus(res);
 
 	auto it = std::find(ok_statuses.begin(), ok_statuses.end(), res_status);
 	if (it != ok_statuses.end()) return;
 
-	auto conn_status = api.PQstatus(conn);
+	auto conn_status = api.f_PQstatus(conn);
 
-	const char *sql_code_str = api.PQresultErrorField(res, PG_DIAG_SQLSTATE);
+	const char *sql_code_str = api.f_PQresultErrorField(res, PG_DIAG_SQLSTATE);
 	std::string_view sql_code = sql_code_str ? sql_code_str : std::string_view{};
 
 	if (conn_status == CONNECTION_BAD)
@@ -616,8 +617,8 @@ static void check_result_status(
 	else if ((sql_code == "55P03") || (sql_code == "40P01") || (sql_code == "40001"))
 		error_type = ErrorType::Lock;
 
-	const char* res_status_str = api.PQresStatus(res_status);
-	const char* res_verb_error_str = api.PQresultVerboseErrorMessage(res, PQERRORS_VERBOSE, PQSHOW_CONTEXT_ALWAYS);
+	const char* res_status_str = api.f_PQresStatus(res_status);
+	const char* res_verb_error_str = api.f_PQresultVerboseErrorMessage(res, PQERRORS_VERBOSE, PQSHOW_CONTEXT_ALWAYS);
 
 	throw_exception(
 		fun_name,
@@ -645,7 +646,7 @@ static void check_ret_code(
 	auto it = std::find(ok_codes.begin(), ok_codes.end(), ret_code);
 	if (it != ok_codes.end()) return;
 
-	switch (api.PQstatus(conn))
+	switch (api.f_PQstatus(conn))
 	{
 	case CONNECTION_BAD:
 		error_type = ErrorType::Connection;
@@ -655,7 +656,7 @@ static void check_ret_code(
 		break;
 	}
 
-	const char* err_msg = api.PQerrorMessage(conn);
+	const char* err_msg = api.f_PQerrorMessage(conn);
 
 	throw_exception(
 		fun_name,
@@ -737,7 +738,7 @@ int64_t dblib_time_to_pg_time(const Time& time)
 
 int64_t dblib_timestamp_to_pg_timestamp(const TimeStamp& ts)
 {
-	return 
+	return
 		(int64_t)dblib_date_to_pg_date(ts.date) * USecsInDay +
 		dblib_time_to_pg_time(ts.time);
 }
@@ -815,51 +816,56 @@ PgLibImpl::PgLibImpl()
 	lib_ = std::make_shared<PgLibData>();
 }
 
-void PgLibImpl::load(const std::wstring_view dyn_lib_file_name)
+void PgLibImpl::load(const FileName &dyn_lib_file_name)
 {
 	auto& module = lib_->module;
 	auto& api = lib_->api;
 
 	if (module.is_loaded()) return;
 
-	std::wstring file_name_to_load =
-		dyn_lib_file_name.empty()
-		? L"libpq.dll"
-		: std::wstring(dyn_lib_file_name);
+	auto file_name = dyn_lib_file_name;
 
-	module.load(file_name_to_load);
+#if defined(DBLIB_WINDOWS)
+	if (file_name.empty())
+		file_name = L"libpq.dll";
+#elif defined(DBLIB_LINUX)
+	if (file_name.empty())
+		file_name = "libpq.so";
+#endif
 
-	module.load_func(api.PQconnectdbParams,           "PQconnectdbParams");
-	module.load_func(api.PQfinish,                    "PQfinish");
-	module.load_func(api.PQstatus,                    "PQstatus");
-	module.load_func(api.PQerrorMessage,              "PQerrorMessage");
-	module.load_func(api.PQexec,                      "PQexec");
-	module.load_func(api.PQprepare,                   "PQprepare");
-	module.load_func(api.PQsendQueryParams,           "PQsendQueryParams");
-	module.load_func(api.PQsendQueryPrepared,         "PQsendQueryPrepared");
-	module.load_func(api.PQsetSingleRowMode,          "PQsetSingleRowMode");
-	module.load_func(api.PQgetResult,                 "PQgetResult");
-	module.load_func(api.PQresultStatus,              "PQresultStatus");
-	module.load_func(api.PQresStatus,                 "PQresStatus");
-	module.load_func(api.PQresultErrorMessage,        "PQresultErrorMessage");
-	module.load_func(api.PQresultVerboseErrorMessage, "PQresultVerboseErrorMessage");
-	module.load_func(api.PQresultErrorField,          "PQresultErrorField");
-	module.load_func(api.PQntuples,                   "PQntuples");
-	module.load_func(api.PQnfields,                   "PQnfields");
-	module.load_func(api.PQbinaryTuples,              "PQbinaryTuples");
-	module.load_func(api.PQfname,                     "PQfname");
-	module.load_func(api.PQftype,                     "PQftype");
-	module.load_func(api.PQfsize,                     "PQfsize");
-	module.load_func(api.PQcmdTuples,                 "PQcmdTuples");
-	module.load_func(api.PQgetvalue,                  "PQgetvalue");
-	module.load_func(api.PQgetlength,                 "PQgetlength");
-	module.load_func(api.PQgetisnull,                 "PQgetisnull");
-	module.load_func(api.PQnparams,                   "PQnparams");
-	module.load_func(api.PQparamtype,                 "PQparamtype");
-	module.load_func(api.PQdescribePrepared,          "PQdescribePrepared");
-	module.load_func(api.PQclear,                     "PQclear");
-	module.load_func(api.PQputCopyData,               "PQputCopyData");
-	module.load_func(api.PQputCopyEnd,                "PQputCopyEnd");
+	module.load(file_name);
+
+	module.load_func(api.f_PQconnectdbParams,           "PQconnectdbParams");
+	module.load_func(api.f_PQfinish,                    "PQfinish");
+	module.load_func(api.f_PQstatus,                    "PQstatus");
+	module.load_func(api.f_PQerrorMessage,              "PQerrorMessage");
+	module.load_func(api.f_PQexec,                      "PQexec");
+	module.load_func(api.f_PQprepare,                   "PQprepare");
+	module.load_func(api.f_PQsendQueryParams,           "PQsendQueryParams");
+	module.load_func(api.f_PQsendQueryPrepared,         "PQsendQueryPrepared");
+	module.load_func(api.f_PQsetSingleRowMode,          "PQsetSingleRowMode");
+	module.load_func(api.f_PQgetResult,                 "PQgetResult");
+	module.load_func(api.f_PQresultStatus,              "PQresultStatus");
+	module.load_func(api.f_PQresStatus,                 "PQresStatus");
+	module.load_func(api.f_PQresultErrorMessage,        "PQresultErrorMessage");
+	module.load_func(api.f_PQresultVerboseErrorMessage, "PQresultVerboseErrorMessage");
+	module.load_func(api.f_PQresultErrorField,          "PQresultErrorField");
+	module.load_func(api.f_PQntuples,                   "PQntuples");
+	module.load_func(api.f_PQnfields,                   "PQnfields");
+	module.load_func(api.f_PQbinaryTuples,              "PQbinaryTuples");
+	module.load_func(api.f_PQfname,                     "PQfname");
+	module.load_func(api.f_PQftype,                     "PQftype");
+	module.load_func(api.f_PQfsize,                     "PQfsize");
+	module.load_func(api.f_PQcmdTuples,                 "PQcmdTuples");
+	module.load_func(api.f_PQgetvalue,                  "PQgetvalue");
+	module.load_func(api.f_PQgetlength,                 "PQgetlength");
+	module.load_func(api.f_PQgetisnull,                 "PQgetisnull");
+	module.load_func(api.f_PQnparams,                   "PQnparams");
+	module.load_func(api.f_PQparamtype,                 "PQparamtype");
+	module.load_func(api.f_PQdescribePrepared,          "PQdescribePrepared");
+	module.load_func(api.f_PQclear,                     "PQclear");
+	module.load_func(api.f_PQputCopyData,               "PQputCopyData");
+	module.load_func(api.f_PQputCopyEnd,                "PQputCopyEnd");
 }
 
 bool PgLibImpl::is_loaded() const
@@ -930,14 +936,14 @@ void PgConnectionImpl::connect()
 	keywords.push_back(nullptr);
 	values.push_back(nullptr);
 
-	conn_ = lib_->api.PQconnectdbParams(keywords.data(), values.data(), 0);
+	conn_ = lib_->api.f_PQconnectdbParams(keywords.data(), values.data(), 0);
 
 	try
 	{
 		check_ret_code(
 			lib_->api,
 			conn_,
-			lib_->api.PQstatus(conn_),
+			lib_->api.f_PQstatus(conn_),
 			"PQstatus after PQconnectdbParams",
 			{ CONNECTION_OK },
 			{},
@@ -959,7 +965,7 @@ void PgConnectionImpl::disconnect()
 
 void PgConnectionImpl::disconnect_impl()
 {
-	lib_->api.PQfinish(conn_);
+	lib_->api.f_PQfinish(conn_);
 	conn_ = nullptr;
 }
 
@@ -997,7 +1003,7 @@ void PgConnectionImpl::direct_execute(std::string_view sql)
 
 	auto exec_impl = [this](const char* sql)
 	{
-		auto result = lib_->api.PQexec(conn_, sql);
+		auto result = lib_->api.f_PQexec(conn_, sql);
 		check_result_status(lib_->api, conn_, result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Normal);
 	};
 
@@ -1030,9 +1036,9 @@ PgTransactionPtr PgConnectionImpl::create_pg_transaction(const TransactionParams
 
 void PgConnectionImpl::skip_previous_data()
 {
-	for (;;) 
+	for (;;)
 	{
-		PGresultHandler res(lib_->api, lib_->api.PQgetResult(conn_));
+		PGresultHandler res(lib_->api, lib_->api.f_PQgetResult(conn_));
 		if (res.get() == nullptr) break;
 	}
 }
@@ -1048,7 +1054,7 @@ void PgConnectionImpl::check_is_connected()
 
 PgTransactionImpl::PgTransactionImpl(
 	const PgLibDataPtr&        lib,
-	const PgConnectionImplPtr& conn, 
+	const PgConnectionImplPtr& conn,
 	const TransactionParams&   transaction_params
 ) :
 	lib_(lib),
@@ -1139,7 +1145,7 @@ void PgTransactionImpl::internal_rollback()
 void PgTransactionImpl::exec(const char* sql)
 {
 	conn_->skip_previous_data();
-	auto result = lib_->api.PQexec(conn_->get_connection(), sql);
+	auto result = lib_->api.f_PQexec(conn_->get_connection(), sql);
 	check_result_status(lib_->api, conn_->get_connection(), result, "PQexec", { PGRES_COMMAND_OK }, sql, ErrorType::Transaction);
 }
 
@@ -1157,11 +1163,11 @@ PgStatementPtr PgTransactionImpl::create_pg_statement()
 
 PgStatementImpl::PgStatementImpl(
 	const PgLibDataPtr&         lib,
-	const PgConnectionImplPtr&  conn, 
+	const PgConnectionImplPtr&  conn,
 	const PgTransactionImplPtr& tran
-) : 
+) :
 	lib_(lib),
-	conn_(conn), 
+	conn_(conn),
 	tran_(tran),
 	result_(lib->api),
 	columns_helper_(*this)
@@ -1174,7 +1180,7 @@ TransactionPtr PgStatementImpl::get_transaction()
 }
 
 void PgStatementImpl::prepare(
-	std::string_view sql, 
+	std::string_view sql,
 	bool             use_native_parameters_syntax)
 {
 	columns_helper_.clear();
@@ -1191,7 +1197,7 @@ void PgStatementImpl::prepare(
 
 	sql_buffer_ = sql_preprocessor_.get_preprocessed_sql();
 
-	PGresultHandler tmp_result(lib_->api, lib_->api.PQprepare(
+	PGresultHandler tmp_result(lib_->api, lib_->api.f_PQprepare(
 		conn_->get_connection(),
 		"",
 		sql_buffer_.c_str(),
@@ -1209,7 +1215,7 @@ void PgStatementImpl::prepare(
 		ErrorType::Normal
 	);
 
-	result_.set(lib_->api.PQdescribePrepared(
+	result_.set(lib_->api.f_PQdescribePrepared(
 		conn_->get_connection(),
 		""
 	));
@@ -1224,11 +1230,11 @@ void PgStatementImpl::prepare(
 		ErrorType::Normal
 	);
 
-	int params_count = lib_->api.PQnparams(result_.get());
+	int params_count = lib_->api.f_PQnparams(result_.get());
 
 	param_types_.resize(params_count);
 	for (int i = 0; i < params_count; i++)
-		param_types_[i] = lib_->api.PQparamtype(result_.get(), i);
+		param_types_[i] = lib_->api.f_PQparamtype(result_.get(), i);
 
 	param_data_.resize(params_count);
 	for (auto& item : param_data_) item.str.clear();
@@ -1245,7 +1251,7 @@ void PgStatementImpl::prepare(
 }
 
 void PgStatementImpl::prepare(
-	std::wstring_view sql, 
+	std::wstring_view sql,
 	bool              use_native_parameters_syntax)
 {
 	utf16_to_utf8(sql, utf16_to_utf8_buffer_);
@@ -1271,8 +1277,8 @@ void PgStatementImpl::execute(std::string_view sql)
 
 	sql_buffer_ = sql_preprocessor_.get_preprocessed_sql();
 
-	int res = lib_->api.PQsendQueryParams(
-		conn_->get_connection(), 
+	int res = lib_->api.f_PQsendQueryParams(
+		conn_->get_connection(),
 		sql_buffer_.c_str(),
 		0,
 		nullptr,
@@ -1292,7 +1298,7 @@ void PgStatementImpl::execute(std::string_view sql)
 		ErrorType::Normal
 	);
 
-	res = lib_->api.PQsetSingleRowMode(conn_->get_connection());
+	res = lib_->api.f_PQsetSingleRowMode(conn_->get_connection());
 
 	check_ret_code(
 		lib_->api,
@@ -1312,7 +1318,7 @@ void PgStatementImpl::execute(std::string_view sql)
 
 void PgStatementImpl::fetch_and_check_if_result_is_end_of_tuples()
 {
-	result_.set(lib_->api.PQgetResult(conn_->get_connection()));
+	result_.set(lib_->api.f_PQgetResult(conn_->get_connection()));
 	if (!result_.get()) return;
 
 	check_result_status(
@@ -1325,18 +1331,18 @@ void PgStatementImpl::fetch_and_check_if_result_is_end_of_tuples()
 		ErrorType::Normal
 	);
 
-	auto status = lib_->api.PQresultStatus(result_.get());
+	auto status = lib_->api.f_PQresultStatus(result_.get());
 	if ((status == PGRES_TUPLES_OK) || (status == PGRES_COMMAND_OK) || (status == PGRES_COPY_IN))
 	{
 		contains_data_ = false;
 		return;
 	}
 
-	int rows_count = lib_->api.PQntuples(result_.get());
+	int rows_count = lib_->api.f_PQntuples(result_.get());
 	if (rows_count != 1)
 		throw InternalException("Number on tuples in result != 1", rows_count, 0);
 
-	int bin_format = lib_->api.PQbinaryTuples(result_.get());
+	int bin_format = lib_->api.f_PQbinaryTuples(result_.get());
 	if (bin_format != 1)
 		throw InternalException("Result format is not binary", rows_count, 0);
 
@@ -1363,7 +1369,7 @@ void PgStatementImpl::execute()
 
 	int params_count = (int)param_data_.size();
 
-	int res = lib_->api.PQsendQueryPrepared(
+	int res = lib_->api.f_PQsendQueryPrepared(
 		conn_->get_connection(),
 		"",
 		params_count,
@@ -1383,7 +1389,7 @@ void PgStatementImpl::execute()
 		ErrorType::Normal
 	);
 
-	res = lib_->api.PQsetSingleRowMode(conn_->get_connection());
+	res = lib_->api.f_PQsetSingleRowMode(conn_->get_connection());
 
 	check_ret_code(
 		lib_->api,
@@ -1404,7 +1410,7 @@ void PgStatementImpl::execute()
 size_t PgStatementImpl::get_changes_count()
 {
 	check_is_in_executed_state();
-	auto* changes_text = lib_->api.PQcmdTuples(result_.get());
+	auto* changes_text = lib_->api.f_PQcmdTuples(result_.get());
 	return (size_t)atoi(changes_text);
 }
 
@@ -1436,17 +1442,22 @@ bool PgStatementImpl::fetch()
 template <typename T>
 void PgStatementImpl::set_value_parameter(size_t param_index, T value)
 {
-	if constexpr ((sizeof(T) == 2) || (sizeof(T) == 4) || (sizeof(T) == 8))
+	bool constexpr size2 = sizeof(T) == 2;
+	bool constexpr size4 = sizeof(T) == 4;
+	bool constexpr size8 = sizeof(T) == 8;
+
+	static_assert(
+		size2||size4||size8,
+		"Wrong type of parameter"
+	);
+
+	if constexpr (size2 || size4 || size8)
 	{
 		static_assert(ParamValue::FixedBufferSize >= sizeof(T));
 		char* data = param_data_.at(param_index - 1).fixed_buffer.data();
 		write_value_into_bytes_be(value, data);
 		param_values_.at(param_index - 1) = data;
 		param_lengths_.at(param_index - 1) = sizeof(T);
-	}
-	else
-	{
-		static_assert(false, "Wrong type of parameter");
 	}
 }
 
@@ -1506,8 +1517,8 @@ ValueType PgStatementImpl::get_param_type(const IndexOrName& param)
 
 	sql_preprocessor_.do_for_param_indexes(
 		param,
-		[&](size_t param_index) 
-		{ 
+		[&](size_t param_index)
+		{
 			ValueType param_type = oid_to_value_type(param_types_.at(param_index));
 			if (result == ValueType::None)
 				result = param_type;
@@ -1564,7 +1575,7 @@ void PgStatementImpl::set_date_opt(const IndexOrName& param, const DateOpt& date
 
 	sql_preprocessor_.do_for_param_indexes(
 		param,
-		[&](size_t param_index) 
+		[&](size_t param_index)
 		{
 			if (date.has_value())
 				set_value_parameter(param_index, dblib_date_to_pg_date(*date));
@@ -1627,20 +1638,20 @@ void PgStatementImpl::set_blob(const IndexOrName& param, const char* blob_data, 
 size_t PgStatementImpl::get_columns_count()
 {
 	check_is_in_prepared_or_executed_state();
-	return lib_->api.PQnfields(result_.get());
+	return lib_->api.f_PQnfields(result_.get());
 }
 
 ValueType PgStatementImpl::get_column_type(const IndexOrName& colum)
 {
 	check_is_in_prepared_or_executed_state();
 	size_t index = columns_helper_.get_column_index(colum);
-	return oid_to_value_type(lib_->api.PQftype(result_.get(), (int)index - 1));
+	return oid_to_value_type(lib_->api.f_PQftype(result_.get(), (int)index - 1));
 }
 
 std::string PgStatementImpl::get_column_name(size_t index)
 {
 	check_is_in_prepared_or_executed_state();
-	return lib_->api.PQfname(result_.get(), (int)index - 1);
+	return lib_->api.f_PQfname(result_.get(), (int)index - 1);
 }
 
 bool PgStatementImpl::is_null(const IndexOrName& column)
@@ -1652,7 +1663,7 @@ bool PgStatementImpl::is_null(const IndexOrName& column)
 
 bool PgStatementImpl::is_null_impl(size_t col_index)
 {
-	return lib_->api.PQgetisnull(result_.get(), 0, (int)col_index - 1) != 0;
+	return lib_->api.f_PQgetisnull(result_.get(), 0, (int)col_index - 1) != 0;
 }
 
 template<typename T>
@@ -1661,7 +1672,7 @@ std::optional<T> PgStatementImpl::get_value_opt_impl(const IndexOrName& column)
 	check_contains_data();
 	size_t index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
-	Oid col_oid = lib_->api.PQftype(result_.get(), (int)index - 1);
+	Oid col_oid = lib_->api.f_PQftype(result_.get(), (int)index - 1);
 	ValueType col_type = oid_to_value_type(col_oid);
 	return get_with_type_cvt<T>(*this, col_type, index);
 }
@@ -1708,8 +1719,8 @@ std::optional<T> PgStatementImpl::get_dt_opt_impl(
 	size_t index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return {};
 
-	Oid real_col_oid = lib_->api.PQftype(result_.get(), (int)index - 1);
-	
+	Oid real_col_oid = lib_->api.f_PQftype(result_.get(), (int)index - 1);
+
 	if (real_col_oid != col_oid)
 		throw WrongTypeConvException(error_text_if_oid_not_match);
 
@@ -1762,10 +1773,10 @@ size_t PgStatementImpl::get_blob_size(const IndexOrName& column)
 	size_t index = columns_helper_.get_column_index(column);
 	if (is_null_impl(index)) return 0;
 
-	if (lib_->api.PQftype(result_.get(), (int)index - 1) != BYTEAOID)
+	if (lib_->api.f_PQftype(result_.get(), (int)index - 1) != BYTEAOID)
 		throw WrongTypeConvException("Result is not in bytea format");
 
-	return lib_->api.PQgetlength(result_.get(), 0, (int)index - 1);
+	return lib_->api.f_PQgetlength(result_.get(), 0, (int)index - 1);
 }
 
 void PgStatementImpl::get_blob_data(const IndexOrName& column, char* dst, size_t size)
@@ -1776,12 +1787,12 @@ void PgStatementImpl::get_blob_data(const IndexOrName& column, char* dst, size_t
 
 	if (is_null_impl(index)) return;
 
-	if (lib_->api.PQftype(result_.get(), (int)index - 1) != BYTEAOID)
+	if (lib_->api.f_PQftype(result_.get(), (int)index - 1) != BYTEAOID)
 		throw WrongTypeConvException("Result is not in bytea format");
 
-	const char* value = lib_->api.PQgetvalue(result_.get(), 0, (int)index - 1);
+	const char* value = lib_->api.f_PQgetvalue(result_.get(), 0, (int)index - 1);
 
-	size_t real_len = lib_->api.PQgetlength(result_.get(), 0, (int)index - 1);
+	size_t real_len = lib_->api.f_PQgetlength(result_.get(), 0, (int)index - 1);
 	if (size > real_len) size = real_len;
 
 	memcpy(dst, value, size);
@@ -1832,22 +1843,22 @@ template<typename T>
 T PgStatementImpl::get_value_impl(size_t col_index)
 {
 	T result {};
-	const char* value = lib_->api.PQgetvalue(result_.get(), 0, (int)col_index - 1);
-	
+	const char* value = lib_->api.f_PQgetvalue(result_.get(), 0, (int)col_index - 1);
+
 	if constexpr (std::is_same_v<T, std::string>)
 	{
-		int len = lib_->api.PQgetlength(result_.get(), 0, (int)col_index - 1);
+		int len = lib_->api.f_PQgetlength(result_.get(), 0, (int)col_index - 1);
 		result.assign(value, value + len);
 	}
 	else if constexpr (std::is_same_v<T, std::wstring>)
 	{
-		int len = lib_->api.PQgetlength(result_.get(), 0, (int)col_index - 1);
+		int len = lib_->api.f_PQgetlength(result_.get(), 0, (int)col_index - 1);
 		utf8_to_utf16(std::string_view{ value , (size_t)len }, utf8_to_utf16_buffer_);
 		result = utf8_to_utf16_buffer_;
 	}
 	else
 	{
-		int len = lib_->api.PQfsize(result_.get(), (int)col_index - 1);
+		int len = lib_->api.f_PQfsize(result_.get(), (int)col_index - 1);
 		if (len != sizeof(T))
 			throw InternalException("Real value size and size of type doesn't match", -1, -1);
 
@@ -1895,7 +1906,7 @@ std::wstring PgStatementImpl::get_wstr_impl(size_t index)
 
 void PgStatementImpl::put_copy_data(const char* data, int data_len)
 {
-	auto put_data_res = lib_->api.PQputCopyData(conn_->get_connection(), data, data_len);
+	auto put_data_res = lib_->api.f_PQputCopyData(conn_->get_connection(), data, data_len);
 
 	check_ret_code(
 		lib_->api,
@@ -1907,7 +1918,7 @@ void PgStatementImpl::put_copy_data(const char* data, int data_len)
 		ErrorType::Normal
 	);
 
-	auto put_end_res = lib_->api.PQputCopyEnd(conn_->get_connection(), nullptr);
+	auto put_end_res = lib_->api.f_PQputCopyEnd(conn_->get_connection(), nullptr);
 
 	check_ret_code(
 		lib_->api,
@@ -1919,7 +1930,7 @@ void PgStatementImpl::put_copy_data(const char* data, int data_len)
 		ErrorType::Normal
 	);
 
-	result_.set(lib_->api.PQgetResult(conn_->get_connection()));
+	result_.set(lib_->api.f_PQgetResult(conn_->get_connection()));
 	if (!result_.get()) return;
 
 	check_result_status(

@@ -17,22 +17,29 @@
 #include "../src/dblib_type_cvt.hpp"
 #include "../src/dblib_stmt_tools.hpp"
 
-#include "dblib/dblib.hpp"
-#include "dblib/dblib_firebird.hpp"
-#include "dblib/dblib_sqlite.hpp"
-#include "dblib/dblib_postgresql.hpp"
-#include "dblib/dblib_cvt_utils.hpp"
+#include "../include/dblib/dblib.hpp"
+#include "../include/dblib/dblib_firebird.hpp"
+#include "../include/dblib/dblib_sqlite.hpp"
+#include "../include/dblib/dblib_postgresql.hpp"
+#include "../include/dblib/dblib_cvt_utils.hpp"
 
+#if defined (DBLIB_WINDOWS)
+	#define NOMINMAX
+	#include <Windows.h>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__linux__)
-#define DBLIB_LINUX
-#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-#define DBLIB_WINDOWS
-#include <Windows.h>
-#else
-#error "Unsupported platform"
+#if !defined(DBLIB_TESTS_FB)
+	#define DBLIB_TESTS_FB 1
+#endif
+
+#if !defined(DBLIB_TESTS_SQLITE)
+	#define DBLIB_TESTS_SQLITE 1
+#endif
+
+#if !defined(DBLIB_TESTS_PG)
+	#define DBLIB_TESTS_PG 1
 #endif
 
 using namespace dblib;
@@ -42,22 +49,16 @@ static FbLibPtr fb_lib;
 static SqliteLibPtr sqlite_lib;
 static PgLibPtr pg_lib;
 
+#if defined (DBLIB_WINDOWS)
 static std::wstring get_executable_path()
 {
-#if defined (DBLIB_LINUX)
-	char path[1024];
-	int path_len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-	assert(path_len != -1);
-	path[path_len] = 0;
-	return path;
-
-#elif defined (DBLIB_WINDOWS)
 	wchar_t path[MAX_PATH];
 	GetModuleFileNameW(NULL, path, MAX_PATH);
-#endif
 	return path;
 }
+#endif
 
+#if DBLIB_TESTS_FB == 1
 static FbConnectionPtr get_firebird_connection()
 {
 	auto lock = std::lock_guard { create_conn_mutex };
@@ -68,19 +69,18 @@ static FbConnectionPtr get_firebird_connection()
 		fb_lib->load();
 	}
 
-#if defined (DBLIB_LINUX)
-	std::wstring fb_database = L"/tmp/dblib_test.fdb";
-#elif defined (DBLIB_WINDOWS)
-	std::wstring fb_database = get_executable_path() + L".fbd";
-#endif
-
 	std::string role = "";
 
 	FbConnectParams connect_params;
 	FbDbCreateParams create_params;
 
+#if defined (DBLIB_LINUX)
+	connect_params.database = "/tmp/dblib_test.fdb";
+#elif defined (DBLIB_WINDOWS)
+	connect_params.database = get_executable_path() + L".fbd";
+#endif
+
 	connect_params.host = "localhost";
-	connect_params.database = fb_database;
 	connect_params.user = "sysdba";
 	connect_params.password = "masterkey";
 	connect_params.role = role;
@@ -104,7 +104,9 @@ static FbServicesPtr get_firebird_services()
 
 	return fb_lib->create_services();
 }
+#endif
 
+#if DBLIB_TESTS_SQLITE == 1
 static SqliteConnectionPtr get_sqlite_connection()
 {
 	auto lock = std::lock_guard{ create_conn_mutex };
@@ -115,11 +117,16 @@ static SqliteConnectionPtr get_sqlite_connection()
 		sqlite_lib->load();
 	}
 
-	std::wstring sqlite_database = get_executable_path() + L".sqlite";
-
+#if defined (DBLIB_LINUX)
+	std::string sqlite_database = "/tmp/dblib_test.sqlite";
+#elif defined (DBLIB_WINDOWS)
+	auto sqlite_database = get_executable_path() + L".sqlite";
+#endif
 	return sqlite_lib->create_connection(sqlite_database, {});
 }
+#endif
 
+#if DBLIB_TESTS_PG == 1
 static PgConnectionPtr get_postgresql_connection()
 {
 	auto lock = std::lock_guard{ create_conn_mutex };
@@ -137,42 +144,40 @@ static PgConnectionPtr get_postgresql_connection()
 	params.user = "dblib_test";
 	params.password = "dblib_test";
 
-	return pg_lib->create_connection(params); 
+	return pg_lib->create_connection(params);
 }
+#endif
 
 using Connections = std::vector<ConnectionPtr>;
 
 static void for_all_connections_do(size_t conn_count, const std::function<void (const Connections&)> &fun)
 {
-	if (true)
-	{
-		Connections fb_conns;
+#if DBLIB_TESTS_FB == 1
+	Connections fb_conns;
 
-		for (size_t i = 0; i < conn_count; i++)
-			fb_conns.push_back(get_firebird_connection());
+	for (size_t i = 0; i < conn_count; i++)
+		fb_conns.push_back(get_firebird_connection());
 
-		fun(fb_conns);
-	}
+	fun(fb_conns);
+#endif
 
-	if (true)
-	{
-		Connections sqlite_conns;
+#if DBLIB_TESTS_SQLITE == 1
+	Connections sqlite_conns;
 
-		for (size_t i = 0; i < conn_count; i++)
-			sqlite_conns.push_back(get_sqlite_connection());
+	for (size_t i = 0; i < conn_count; i++)
+		sqlite_conns.push_back(get_sqlite_connection());
 
-		fun(sqlite_conns);
-	}
+	fun(sqlite_conns);
+#endif
 
-	if (true)
-	{
+#if DBLIB_TESTS_PG == 1
 		Connections pb_conns;
 
 		for (size_t i = 0; i < conn_count; i++)
 			pb_conns.push_back(get_postgresql_connection());
 
 		fun(pb_conns);
-	}
+#endif
 }
 
 static void exec_no_throw(Connection &connection, std::initializer_list<std::string> sql_list)
@@ -186,7 +191,7 @@ static void exec_no_throw(Connection &connection, std::initializer_list<std::str
 			st->execute(sql);
 			tran->commit();
 		}
-		catch (...) 
+		catch (...)
 		{
 			tran->rollback();
 		}
@@ -565,7 +570,7 @@ static void do_transaction_deadlock_test(const char *sql1, const char *sql2, boo
 
 		conn1.connect();
 		exec_no_throw(conn1, { "drop table tr_deadlock_test" });
-		exec(conn1, { 
+		exec(conn1, {
 			"create table tr_deadlock_test (int_fld1 integer, int_fld2 integer)",
 			"insert into tr_deadlock_test (int_fld1, int_fld2) values (1, 2)",
 			"insert into tr_deadlock_test (int_fld1, int_fld2) values (2, 3)",
@@ -589,7 +594,7 @@ static void do_transaction_deadlock_test(const char *sql1, const char *sql2, boo
 		{
 			BOOST_CHECK(false);
 		}
-		
+
 		try
 		{
 			auto st2 = tr2->create_statement();
@@ -815,8 +820,8 @@ BOOST_AUTO_TEST_CASE(binds_test)
 		connection.connect();
 
 		exec_no_throw(connection, { "drop table binds_test" });
-		exec(connection, { 
-			"create table binds_test (" 
+		exec(connection, {
+			"create table binds_test ("
 				"n          integer, "
 				"big_fld    bigint, "
 				"int_fld    integer, "
@@ -1217,7 +1222,7 @@ BOOST_AUTO_TEST_CASE(col_names_test)
 		auto &connection = *connections[0];
 		connection.connect();
 
-		exec_no_throw(connection, { 
+		exec_no_throw(connection, {
 			"drop table col_names_test",
 			"drop table col_names_test2"
 		});
@@ -1362,7 +1367,7 @@ BOOST_AUTO_TEST_CASE(timestamp_db_test)
 		connection.connect();
 
 		exec_no_throw(connection, { "drop table timestamp_test" });
-		exec(connection, { 
+		exec(connection, {
 			"create table timestamp_test (ts_fld timestamp)",
 			"insert into timestamp_test(ts_fld) values(null)"
 		});
@@ -1396,12 +1401,12 @@ BOOST_AUTO_TEST_CASE(blobs_test)
 
 		exec_no_throw(connection, { "drop table test_blobs" });
 
-		std::string blob_type_name = 
-			(connection.get_driver_name() == "postgresql") 
-			? "bytea" 
+		std::string blob_type_name =
+			(connection.get_driver_name() == "postgresql")
+			? "bytea"
 			: "blob";
 
-		std::string create_sql = 
+		std::string create_sql =
 			"create table test_blobs ( "
 				"n integer, "
 				"blob_fld1 " + blob_type_name + ", " +
@@ -1467,7 +1472,7 @@ BOOST_AUTO_TEST_CASE(correct_seq_test)
 		connection.connect();
 
 		exec_no_throw(connection, { "drop table test_seq" });
-		exec(connection, { 
+		exec(connection, {
 			"create table test_seq (n integer)",
 			"insert into test_seq(n) values(777)"
 		});
@@ -1482,7 +1487,7 @@ BOOST_AUTO_TEST_CASE(correct_seq_test)
 		auto tran = connection.create_transaction();
 		auto st = tran->create_statement();
 
-		BOOST_CHECK(test([&] { st->fetch(); })); 
+		BOOST_CHECK(test([&] { st->fetch(); }));
 
 		BOOST_CHECK(test([&] { st->get_columns_count(); }));
 		BOOST_CHECK(test([&] { st->get_column_type(1); }));
@@ -1595,6 +1600,8 @@ BOOST_AUTO_TEST_SUITE_END()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if DBLIB_TESTS_FB == 1
+
 BOOST_AUTO_TEST_SUITE(FirebirdServices)
 
 BOOST_AUTO_TEST_CASE(test_fb_services_users)
@@ -1623,7 +1630,11 @@ BOOST_AUTO_TEST_CASE(test_fb_services_users)
 
 BOOST_AUTO_TEST_SUITE_END()
 
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if DBLIB_TESTS_PG == 1
 
 BOOST_AUTO_TEST_SUITE(PosgreSQLMisc)
 
@@ -1685,7 +1696,7 @@ BOOST_AUTO_TEST_CASE(pg_copy)
 	conn->connect();
 
 	exec_no_throw(*conn, { "drop table pg_copy_test" });
-	exec(*conn, { 
+	exec(*conn, {
 		"create table pg_copy_test ("
 		"int_fld integer, "
 		"float_fld real, "
@@ -1694,7 +1705,7 @@ BOOST_AUTO_TEST_CASE(pg_copy)
 		"tm_fld time, "
 		"dt_fld date, "
 		"str_fld varchar(200)"
-		")" 
+		")"
 	});
 
 	auto tran = conn->create_transaction();
@@ -1782,5 +1793,6 @@ BOOST_AUTO_TEST_CASE(pg_copy)
 	tran->commit();
 };
 
-
 BOOST_AUTO_TEST_SUITE_END()
+
+#endif

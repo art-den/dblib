@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,15 +24,32 @@ THE SOFTWARE.
 
 #pragma once
 
+#include <string>
+
+#if defined(__linux__)
+	#define DBLIB_LINUX
+	namespace dblib {
+		using FileName = std::string;
+	}
+#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	namespace dblib {
+		using FileName = std::wstring;
+	}
+	#define DBLIB_WINDOWS
+#else
+	#error "Unsupported platform"
+#endif
+
 // building
-#if defined(DBLIB_BUILDING) 
+#if defined(DBLIB_BUILDING) && defined(DBLIB_WINDOWS)
 	#define DBLIB_API __declspec(dllexport)
 	#pragma warning(disable: 4251)
 	#pragma warning(disable: 4275)
 
 // using
-#else 
+#else
 	#define DBLIB_API
 #endif
 
 #define DB_LIB_UNIQUE_PIMPL(CLASS, OBJ) struct CLASS; std::unique_ptr<CLASS> OBJ;
+

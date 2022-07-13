@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,8 +30,8 @@ THE SOFTWARE.
 #include <string_view>
 #include <string>
 
-#include "dblib/dblib_exception.hpp"
-#include "dblib/dblib_consts.hpp"
+#include "../include/dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_consts.hpp"
 
 namespace dblib {
 
@@ -59,34 +59,59 @@ public:
 	virtual std::wstring get_wstr_impl(size_t index) = 0;
 };
 
-
 template <typename T>
 constexpr const char *get_std_type_name()
 {
-	if constexpr (std::is_same_v<T, long>)
-		return "long";
-	else if constexpr (std::is_same_v<T, int16_t>)
+	bool constexpr is_int16_t = std::is_same_v<T, int16_t>;
+	bool constexpr is_uint16_t = std::is_same_v<T, uint16_t>;
+	bool constexpr is_int32_t = std::is_same_v<T, int32_t>;
+	bool constexpr is_uint32_t = std::is_same_v<T, uint32_t>;
+	bool constexpr is_int64_t = std::is_same_v<T, int64_t>;
+	bool constexpr is_uint64_t = std::is_same_v<T, uint64_t>;
+	bool constexpr is_int = std::is_same_v<T, int>;
+	bool constexpr is_long = std::is_same_v<T, long>;
+	bool constexpr is_long_long_int = std::is_same_v<T, long long int>;
+	bool constexpr is_float = std::is_same_v<T, float>;
+	bool constexpr is_double = std::is_same_v<T, double>;
+	bool constexpr is_string = std::is_same_v<T, std::string>;
+	bool constexpr is_wstring = std::is_same_v<T, std::wstring>;
+
+	static_assert(
+		is_long||is_int16_t||is_uint16_t||is_int32_t||
+		is_uint32_t||is_int64_t||is_uint64_t||is_int||
+		is_long_long_int||is_float||is_double||is_string||
+		is_wstring,
+		"Unsupported type in get_std_type_name"
+	);
+
+	if constexpr (is_int16_t)
 		return "int16_t";
-	else if constexpr (std::is_same_v<T, uint16_t>)
+	else if constexpr (is_uint16_t)
 		return "uint16_t";
-	else if constexpr (std::is_same_v<T, int32_t>)
+	else if constexpr (is_int32_t)
 		return "int32_t";
-	else if constexpr (std::is_same_v<T, uint32_t>)
+	else if constexpr (is_uint32_t)
 		return "uint32_t";
-	else if constexpr (std::is_same_v<T, int64_t>)
+	else if constexpr (is_int64_t)
 		return "int64_t";
-	else if constexpr (std::is_same_v<T, uint64_t>)
+	else if constexpr (is_uint64_t)
 		return "uint64_t";
-	else if constexpr (std::is_same_v<T, float>)
+	else if constexpr (is_int)
+		return "int";
+	else if constexpr (is_long)
+		return "long";
+	else if constexpr (is_long_long_int)
+		return "long long int";
+	else if constexpr (is_float)
 		return "float";
-	else if constexpr (std::is_same_v<T, double>)
+	else if constexpr (is_double)
 		return "double";
-	else if constexpr (std::is_same_v<T, std::string>)
+	else if constexpr (is_string)
 		return "std::string";
-	else if constexpr (std::is_same_v<T, std::wstring>)
+	else if constexpr (is_wstring)
 		return "std::wstring";
 	else
-		static_assert(false, "Unsupported type in get_std_type_name");
+		return nullptr;
 }
 
 template <typename T1, typename T2>
@@ -122,7 +147,7 @@ bool check_cvt_range(T2 value, bool raize_exception)
 	return true;
 }
 
-template <typename R, typename A> 
+template <typename R, typename A>
 R int_to(A arg)
 {
 	if constexpr (std::is_same_v<R, A>)
@@ -144,59 +169,76 @@ R int_to(A arg)
 template <typename R, typename A>
 R float_to(A arg)
 {
-	if constexpr (std::is_same_v<R, A>)
+	bool constexpr is_same = std::is_same_v<R, A>;
+	bool constexpr is_string = std::is_same_v<R, std::string>;
+	bool constexpr is_wstring = std::is_same_v<R, std::wstring>;
+	bool constexpr is_float = std::is_same_v<R, float>;
+	bool constexpr is_double = std::is_same_v<R, double>;
+	bool constexpr is_integral = std::is_integral_v<R>;
+
+	static_assert(
+		is_same||is_string||is_wstring||
+		is_float||is_double||is_integral,
+		"Unsupported type in float_to"
+	);
+
+	if constexpr (is_same)
 		return arg;
 
-	else if constexpr (std::is_same_v<R, std::string>)
+	else if constexpr (is_string)
 		return std::to_string(arg);
 
-	else if constexpr (std::is_same_v<R, std::wstring>)
+	else if constexpr (is_wstring)
 		return std::to_wstring(arg);
 
-	else if constexpr (std::is_same_v<R, float> || std::is_same_v<R, double>)
+	else if constexpr (is_float || is_double)
 	{
 		check_cvt_range<R>(arg, true);
 		return R(arg);
 	}
 
-	else if constexpr (std::is_integral_v<R>)
+	else if constexpr (is_integral)
 	{
 		check_cvt_range<R>(arg, true);
 		return static_cast<R>((arg < 0) ? arg - 0.5 : arg + 0.5);
 	}
-
-	else
-		static_assert(false, "Unsupported type in float_to");
 }
 
 template <typename R, typename A>
 R str_to(A &&arg)
 {
-	if constexpr (std::is_same_v<R, A>)
+	bool constexpr is_same = std::is_same_v<R, A>;
+	bool constexpr is_integral = std::is_integral_v<R>;
+	bool constexpr is_float = std::is_same_v<R, float>;
+	bool constexpr is_double = std::is_same_v<R, double>;
+
+	static_assert(
+		is_same||is_integral||is_float||is_double,
+		"Unsupported type in str_to"
+	);
+
+	if constexpr (is_same)
 		return arg;
 
-	else if constexpr (std::is_integral_v<R>)
+	else if constexpr (is_integral)
 	{
 		auto value = std::stoll(arg);
 		check_cvt_range<R>(value, true);
 		return R(value);
 	}
 
-	else if constexpr (std::is_same_v<R, float>)
+	else if constexpr (is_float)
 	{
 		return std::stof(arg);
 	}
 
-	else if constexpr (std::is_same_v<R, double>)
+	else if constexpr (is_double)
 	{
 		return std::stod(arg);
 	}
-
-	else
-		static_assert(false, "Unsupported type in str_to");
 }
 
-template <typename T> 
+template <typename T>
 void set_int_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, T value)
 {
 	switch (param_type)
@@ -234,7 +276,7 @@ void set_int_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType para
 	}
 }
 
-template <typename T> 
+template <typename T>
 void set_float_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, T value)
 {
 	switch (param_type)
@@ -272,7 +314,7 @@ void set_float_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType pa
 	}
 }
 
-template <typename T> 
+template <typename T>
 void set_str_param_with_type_cvt(IParameterSetterWithTypeCvt &dp, ValueType param_type, size_t index, const T &text)
 {
 	static_assert(
@@ -323,21 +365,33 @@ void set_param_with_type_cvt(IParameterSetterWithTypeCvt& dp, ValueType param_ty
 {
 	using Type = std::remove_const_t<std::remove_reference_t<T> >;
 
-	if constexpr (std::is_same_v<Type, int16_t> || std::is_same_v<Type, int32_t> || std::is_same_v<Type, int64_t>)
+	bool constexpr is_int16_t = std::is_same_v<Type, int16_t>;
+	bool constexpr is_int32_t = std::is_same_v<Type, int32_t>;
+	bool constexpr is_int64_t = std::is_same_v<Type, int64_t>;
+	bool constexpr is_float = std::is_same_v<Type, float>;
+	bool constexpr is_double = std::is_same_v<Type, double>;
+	bool constexpr is_string = std::is_same_v<Type, std::string>;
+	bool constexpr is_wstring = std::is_same_v<Type, std::wstring>;
+
+	static_assert(
+		is_int16_t||is_int32_t||is_int64_t||
+		is_float||is_double||
+		is_string || is_wstring,
+		"Type is not supported in set_param_with_type_cvt"
+	);
+
+	if constexpr (is_int16_t || is_int32_t || is_int64_t)
 		set_int_param_with_type_cvt(dp, param_type, index, param_value);
 
-	else if constexpr (std::is_same_v<Type, float> || std::is_same_v<Type, double>)
+	else if constexpr (is_float || is_double)
 		set_float_param_with_type_cvt(dp, param_type, index, param_value);
 
-	else if constexpr (std::is_same_v<Type, std::string> || std::is_same_v<Type, std::wstring>)
+	else if constexpr (is_string || is_wstring)
 		set_str_param_with_type_cvt(dp, param_type, index, param_value);
-
-	else
-		static_assert(false, "Type is not supported in set_param_with_type_cvt");
 }
 
 
-template <typename T> 
+template <typename T>
 T get_with_type_cvt(IResultGetterWithTypeCvt &dp, ValueType fld_type, size_t index)
 {
 	switch (fld_type)

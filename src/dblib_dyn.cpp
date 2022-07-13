@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,12 @@ THE SOFTWARE.
 
 namespace dblib {
 
+DynLib::~DynLib()
+{
+	close();
+}
+
+#if defined (DBLIB_WINDOWS)
 static std::wstring get_path_for_file_name(const std::wstring &file_name)
 {
 	auto last_del = file_name.find_last_of(L"\\/");
@@ -41,11 +47,6 @@ static std::wstring get_cur_dir()
 	str.resize(size);
 	GetCurrentDirectoryW((DWORD)str.size(), &str.front());
 	return str;
-}
-
-DynLib::~DynLib()
-{
-	close();
 }
 
 void DynLib::load(const std::wstring &file_name)
@@ -71,12 +72,27 @@ void DynLib::load(const std::wstring &file_name)
 		throw SharedLibLoadError{ file_name, err };
 	}
 }
+#elif defined (DBLIB_LINUX)
+void DynLib::load(const std::string &file_name)
+{
+	assert(dll_ == nullptr);
+
+	dll_ = dlopen (file_name.c_str(), RTLD_NOW);
+
+	if (dll_ == nullptr)
+		throw SharedLibLoadError{ file_name, dlerror() };
+}
+#endif
 
 void DynLib::close()
 {
 	if (dll_ != nullptr)
 	{
+#if defined (DBLIB_WINDOWS)
 		FreeLibrary(dll_);
+#elif defined (DBLIB_LINUX)
+		dlclose(dll_);
+#endif
 		dll_ = nullptr;
 	}
 }
@@ -86,4 +102,4 @@ bool DynLib::is_loaded() const
 	return dll_ != nullptr;
 }
 
-} // namespace dblib 
+} // namespace dblib

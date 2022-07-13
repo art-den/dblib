@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,11 +23,19 @@ THE SOFTWARE.
 */
 
 #pragma once
+#include "../include/dblib/dblib_conf.hpp"
 
-#define NOMINMAX
-#include <Windows.h>
+#if defined (DBLIB_WINDOWS)
+	#define NOMINMAX
+	#include <Windows.h>
+	using DllType = HMODULE;
+#elif defined (DBLIB_LINUX)
+	#include <dlfcn.h>
+	using DllType = void*;
+#endif
+
 #include <string>
-#include "dblib/dblib_exception.hpp"
+#include "../include/dblib/dblib_exception.hpp"
 
 namespace dblib {
 
@@ -36,20 +44,29 @@ class DynLib
 public:
 	~DynLib();
 
+#if defined (DBLIB_WINDOWS)
 	void load(const std::wstring &file_name);
+#elif defined (DBLIB_LINUX)
+	void load(const std::string &file_name);
+#endif
+
 	void close();
 	bool is_loaded() const;
 
 	template <typename Fun>
 	void load_func(Fun &fun, const char *name)
 	{
+#if defined (DBLIB_WINDOWS)
 		fun = (Fun)GetProcAddress(dll_, name);
+#elif defined (DBLIB_LINUX)
+		fun = (Fun)dlsym(dll_, name);
+#endif
 		if (fun == nullptr)
 			throw SharedLibProcNotFoundError{ name };
 	}
 
 private:
-	HMODULE dll_ = nullptr;
+	DllType dll_ = nullptr;
 };
 
 } // namespace dblib

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -37,44 +37,44 @@ class FbStatement; typedef std::shared_ptr<FbStatement> FbStatementPtr;
 
 struct DBLIB_API FbApi
 {
-	decltype(isc_attach_database)         *isc_attach_database = nullptr;
-	decltype(isc_database_info)           *isc_database_info = nullptr;
-	decltype(fb_interpret)                *fb_interpret = nullptr;
-	decltype(isc_sql_interprete)          *isc_sql_interprete = nullptr;
-	decltype(isc_detach_database)         *isc_detach_database = nullptr;
-	decltype(isc_create_database)         *isc_create_database = nullptr;
-	decltype(isc_blob_info)               *isc_blob_info = nullptr;
-	decltype(isc_close_blob)              *isc_close_blob = nullptr;
-	decltype(isc_commit_transaction)      *isc_commit_transaction = nullptr;
-	decltype(isc_create_blob2)            *isc_create_blob2 = nullptr;
-	decltype(isc_dsql_allocate_statement) *isc_dsql_allocate_statement = nullptr;
-	decltype(isc_dsql_describe)           *isc_dsql_describe = nullptr;
-	decltype(isc_dsql_describe_bind)      *isc_dsql_describe_bind = nullptr;
-	decltype(isc_dsql_execute2)           *isc_dsql_execute2 = nullptr;
-	decltype(isc_dsql_fetch)              *isc_dsql_fetch = nullptr;
-	decltype(isc_dsql_free_statement)     *isc_dsql_free_statement = nullptr;
-	decltype(isc_dsql_prepare)            *isc_dsql_prepare = nullptr;
-	decltype(isc_dsql_sql_info)           *isc_dsql_sql_info = nullptr;
-	decltype(isc_get_segment)             *isc_get_segment = nullptr;
-	decltype(isc_open_blob2)              *isc_open_blob2 = nullptr;
-	decltype(isc_put_segment)             *isc_put_segment = nullptr;
-	decltype(isc_rollback_transaction)    *isc_rollback_transaction = nullptr;
-	decltype(isc_start_transaction)       *isc_start_transaction = nullptr;
-	decltype(isc_sqlcode)                 *isc_sqlcode = nullptr;
-	decltype(isc_portable_integer)        *isc_portable_integer = nullptr;
-	decltype(isc_service_attach)          *isc_service_attach = nullptr;
-	decltype(isc_service_detach)          *isc_service_detach = nullptr;
-	decltype(isc_service_start)           *isc_service_start = nullptr;
+	decltype(isc_attach_database)         *f_isc_attach_database = nullptr;
+	decltype(isc_database_info)           *f_isc_database_info = nullptr;
+	decltype(fb_interpret)                *f_fb_interpret = nullptr;
+	decltype(isc_sql_interprete)          *f_isc_sql_interprete = nullptr;
+	decltype(isc_detach_database)         *f_isc_detach_database = nullptr;
+	decltype(isc_create_database)         *f_isc_create_database = nullptr;
+	decltype(isc_blob_info)               *f_isc_blob_info = nullptr;
+	decltype(isc_close_blob)              *f_isc_close_blob = nullptr;
+	decltype(isc_commit_transaction)      *f_isc_commit_transaction = nullptr;
+	decltype(isc_create_blob2)            *f_isc_create_blob2 = nullptr;
+	decltype(isc_dsql_allocate_statement) *f_isc_dsql_allocate_statement = nullptr;
+	decltype(isc_dsql_describe)           *f_isc_dsql_describe = nullptr;
+	decltype(isc_dsql_describe_bind)      *f_isc_dsql_describe_bind = nullptr;
+	decltype(isc_dsql_execute2)           *f_isc_dsql_execute2 = nullptr;
+	decltype(isc_dsql_fetch)              *f_isc_dsql_fetch = nullptr;
+	decltype(isc_dsql_free_statement)     *f_isc_dsql_free_statement = nullptr;
+	decltype(isc_dsql_prepare)            *f_isc_dsql_prepare = nullptr;
+	decltype(isc_dsql_sql_info)           *f_isc_dsql_sql_info = nullptr;
+	decltype(isc_get_segment)             *f_isc_get_segment = nullptr;
+	decltype(isc_open_blob2)              *f_isc_open_blob2 = nullptr;
+	decltype(isc_put_segment)             *f_isc_put_segment = nullptr;
+	decltype(isc_rollback_transaction)    *f_isc_rollback_transaction = nullptr;
+	decltype(isc_start_transaction)       *f_isc_start_transaction = nullptr;
+	decltype(isc_sqlcode)                 *f_isc_sqlcode = nullptr;
+	decltype(isc_portable_integer)        *f_isc_portable_integer = nullptr;
+	decltype(isc_service_attach)          *f_isc_service_attach = nullptr;
+	decltype(isc_service_detach)          *f_isc_service_detach = nullptr;
+	decltype(isc_service_start)           *f_isc_service_start = nullptr;
 };
 
 struct DBLIB_API FbConnectParams
 {
-	std::string  host;
-	std::wstring database;
-	std::string  user = "SYSDBA";
-	std::string  password = "masterkey";
-	std::string  role;
-	std::string  charset = "UTF8";
+	std::string host;
+	FileName    database;
+	std::string user = "SYSDBA";
+	std::string password = "masterkey";
+	std::string role;
+	std::string charset = "UTF8";
 };
 
 struct DBLIB_API FbDbCreateParams
@@ -92,7 +92,7 @@ class DBLIB_API FbLib
 public:
 	virtual ~FbLib();
 
-	virtual void load(const std::wstring_view dyn_lib_file_name = {}) = 0;
+	virtual void load(const FileName &dyn_lib_file_name = {}) = 0;
 	virtual bool is_loaded() const = 0;
 
 	virtual const FbApi& get_api() = 0;

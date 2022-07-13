@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2017 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,7 @@ THE SOFTWARE.
 #include <functional>
 #include <map>
 
-#include "dblib/dblib.hpp"
+#include "../include/dblib/dblib.hpp"
 
 namespace dblib {
 
@@ -60,12 +60,12 @@ class SqlPreprocessor
 {
 public:
 	void preprocess(
-		std::string_view sql, 
-		bool use_native_parameters_syntax, 
-		bool supports_indexed_params, 
+		std::string_view sql,
+		bool use_native_parameters_syntax,
+		bool supports_indexed_params,
 		const SqlPreprocessorActions &actions
 	);
-	
+
 	const std::string& get_preprocessed_sql() const;
 
 	void do_for_param_indexes(const IndexOrName& param, const std::function<void(size_t)>& fun);
@@ -82,11 +82,11 @@ private:
 	bool use_native_parameters_syntax_ = false;
 
 	static void preprocess_internal(
-		std::string_view             sql, 
+		std::string_view             sql,
 		std::string                  &preprocessed_sql,
-		const SqlPreprocessorActions &actions, 
-		NamedParams                  &named_params, 
-		IndexedParams                &indexed_params, 
+		const SqlPreprocessorActions &actions,
+		NamedParams                  &named_params,
+		IndexedParams                &indexed_params,
 		int                          &param_index,
 		bool                         use_native_parameters_syntax,
 		bool                         supports_indexed_params
@@ -118,13 +118,13 @@ enum class ErrorType
 };
 
 void throw_exception(
-	const char       *fun_name, 
-	int              code, 
+	const char       *fun_name,
+	int              code,
 	int              extended_code,
-	std::string_view code_expl, 
+	std::string_view code_expl,
 	std::string_view sql_state,
-	std::string_view err_msg, 
-	std::string_view sql, 
+	std::string_view err_msg,
+	std::string_view sql,
 	ErrorType        error_type
 );
 

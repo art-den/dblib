@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2015-2020 Artyomov Denis (denis.artyomov@gmail.com)
+Copyright (c) 2015-2022 Artyomov Denis (denis.artyomov@gmail.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -289,15 +289,15 @@ public:
 	virtual Int32Opt get_int32_opt(const IndexOrName& column) = 0;
 	int32_t get_int32(const IndexOrName& column);
 	int32_t get_int32_or(const IndexOrName& column, int32_t value_if_null);
-	
+
 	virtual Int64Opt get_int64_opt(const IndexOrName& column) = 0;
 	int64_t get_int64(const IndexOrName& column);
 	int64_t get_int64_or(const IndexOrName& column, int64_t value_if_null);
-	
+
 	virtual FloatOpt get_float_opt(const IndexOrName& column) = 0;
 	float get_float(const IndexOrName& column);
 	float get_float_or(const IndexOrName& column, float value_if_null);
-	
+
 	virtual DoubleOpt get_double_opt(const IndexOrName& column) = 0;
 	double get_double(const IndexOrName& column);
 	double get_double_or(const IndexOrName& column, double value_if_null);
@@ -305,28 +305,28 @@ public:
 	virtual StringOpt get_str_utf8_opt(const IndexOrName& column) = 0;
 	std::string get_str_utf8(const IndexOrName& column);
 	std::string get_str_utf8_or(const IndexOrName& column, std::string_view value_if_null);
-	
+
 	virtual WStringOpt get_wstr_opt(const IndexOrName& column) = 0;
 	std::wstring get_wstr(const IndexOrName& column);
 	std::wstring get_wstr_or(const IndexOrName& column, std::wstring_view value_if_null);
-	
+
 	virtual DateOpt get_date_opt(const IndexOrName& column) = 0;
 	Date get_date(const IndexOrName& column);
 	Date get_date_or(const IndexOrName& column, const Date& value_if_null);
-	
+
 	virtual TimeOpt get_time_opt(const IndexOrName& column) = 0;
 	Time get_time(const IndexOrName& column);
 	Time get_time_or(const IndexOrName& column, const Time& value_if_null);
-	
+
 	virtual TimeStampOpt get_timestamp_opt(const IndexOrName& column) = 0;
 	TimeStamp get_timestamp(const IndexOrName& column);
 	TimeStamp get_timestamp_or(const IndexOrName& column, const TimeStamp& value_if_null);
-	
+
 	virtual void get_blob_data(const IndexOrName& column, char* dst, size_t size) = 0;
 	virtual size_t get_blob_size(const IndexOrName& column) = 0;
 
 	// transactions
-	
+
 	virtual TransactionPtr get_transaction() = 0;
 
 	void start_transaction();
